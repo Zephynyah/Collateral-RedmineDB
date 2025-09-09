@@ -4,11 +4,11 @@
 	 Created on:   	10/4/2024 12:23 AM
 	 Created by:   	Jason Hickey
 	 Organization: 	House of Powershell
-	 Filename:     	RedmineDB.psd1
+	 Filename:     	Collateral-RedmineDB.psd1
 	 -------------------------------------------------------------------------
 	 Module Manifest
 	-------------------------------------------------------------------------
-	 Module Name: RedmineDB
+	 Module Name: 	Collateral-RedmineDB
 	===========================================================================
 #>
 
@@ -16,13 +16,13 @@
 @{
 	
 	# Script module or binary module file associated with this manifest
-	RootModule            = 'RedmineDB'
+	RootModule            = 'Collateral-RedmineDB.psm1'
 	
 	# Version number of this module.
-	ModuleVersion         = '1.0.0'
+	ModuleVersion         = '1.0.2'
 	
 	# ID used to uniquely identify this module
-	GUID                  = '0294b835-df6e-488d-836f-fccaa409bd74'
+	GUID                  = '7e95fea9-1d79-4b34-b4b4-877180167879'
 	
 	# Author of this module
 	Author                = 'Jason Hickey'
@@ -40,7 +40,7 @@
 	# CompatiblePSEditions = @('Core', 'Desktop')
 	
 	# Minimum version of the Windows PowerShell engine required by this module
-	PowerShellVersion     = '5.1'
+	# PowerShellVersion     = '5.1'
 	
 	# Name of the Windows PowerShell host required by this module
 	PowerShellHostName    = ''
@@ -60,7 +60,7 @@
 	# Modules that must be imported into the global environment prior to importing
 	# this module
 	RequiredModules       = @(
-		'Microsoft.PowerShell.Utility'
+		# 'Microsoft.PowerShell.Utility'
 	)
 	
 	# Assemblies that must be loaded prior to importing this module
@@ -83,17 +83,17 @@
 	# Functions to export from this module
 	# For performance, list functions explicitly
 	FunctionsToExport     = @(
-		'Connect-Redmine',
-		'Disconnect-Redmine',
-		'Search-RedmineDB',
-		'New-RedmineDB',
-		'Get-RedmineDB',
-		'Edit-RedmineDB',
-		'Remove-RedmineDB',
-		'Invoke-ValidateDB',
-		'Edit-RedmineDBXL',
-		'Import-RedmineEnv',
-		'Import-Excel'
+		# 'Connect-Redmine',
+		# 'Disconnect-Redmine',
+		# 'Search-RedmineDB',
+		# 'New-RedmineDB',
+		# 'Get-RedmineDB',
+		# 'Edit-RedmineDB',
+		# 'Remove-RedmineDB',
+		# 'Invoke-ValidateDB',
+		# 'Edit-RedmineDBXL',
+		# 'Import-RedmineEnv',
+		# 'Import-Excel'
 	)
 	
 	# Cmdlets to export from this module

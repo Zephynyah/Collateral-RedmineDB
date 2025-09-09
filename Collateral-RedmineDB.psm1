@@ -1,11 +1,11 @@
 <#
 	===========================================================================
-	 Module Name:       RedmineDB
+	 Module Name:       Collateral-RedmineDB.psm1
 	 Created with:      SAPIEN Technologies, Inc., PowerShell Studio 2024 v5.8.241
 	 Created on:        10/4/2024 12:23 AM
 	 Created by:        Jason Hickey
 	 Organization:      House of Powershell
-	 Filename:          RedmineDB.psm1
+	 Filename:          Collateral-RedmineDB.psm1
 	 Description:       PowerShell module for Redmine database API operations
 	 Version:           1.0.1
 	 Last Modified:     2025-06-26
@@ -14,10 +14,15 @@
 	 Licensed under the MIT License.
 	===========================================================================
 #>
-
 #Requires -Version 5.0
 
 using namespace System.Management.Automation
+
+# Get-ChildItem -Path $PSScriptRoot -Recurse | Unblock-File
+
+# $script:ModuleRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+
+# Import-Module $PSScriptRoot\..\..\Misc\helper.psm1 -Verbose:$false
 
 # Module-level constants
 $script:ModuleConstants = @{
@@ -55,17 +60,17 @@ $script:CustomFieldIds = @{
 
 #region Variables - Data Import with Error Handling
 try {
-    $script:DBProperties = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\properties.xml') -ErrorAction Stop
-    $script:DBType = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\type.xml') -ErrorAction Stop
-    $script:DBStatus = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\status.xml') -ErrorAction Stop
-    $script:DBvalidOS = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\opsystem.xml') -ErrorAction Stop
-    $script:DBvalidProgram = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\programs.xml') -ErrorAction Stop
-    $script:DBvalidState = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\state.xml') -ErrorAction Stop
-    $script:DBvalidBuilding = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\building.xml') -ErrorAction Stop
-    $script:DBvalidRoom = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\room.xml') -ErrorAction Stop
-    $script:DBvalidStatusGSC = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\gscstatus.xml') -ErrorAction Stop
-    $script:DBvalidLifecycle = Import-Clixml -Path (Join-Path $PSScriptRoot 'xml\lifecycle.xml') -ErrorAction Stop
-    
+    $script:DBProperties = Import-Clixml -Path '.\Settings\building.xml' -ErrorAction Stop
+    $script:DBType = Import-Clixml -Path '.\Settings\type.xml' -ErrorAction Stop
+    $script:DBStatus = Import-Clixml -Path '.\Settings\status.xml' -ErrorAction Stop
+    $script:DBvalidOS = Import-Clixml -Path '.\Settings\opsystem.xml' -ErrorAction Stop
+    $script:DBvalidProgram = Import-Clixml -Path '.\Settings\programs.xml' -ErrorAction Stop
+    $script:DBvalidState = Import-Clixml -Path '.\Settings\state.xml' -ErrorAction Stop
+    $script:DBvalidBuilding = Import-Clixml -Path '.\Settings\building.xml' -ErrorAction Stop
+    $script:DBvalidRoom = Import-Clixml -Path '.\Settings\room.xml' -ErrorAction Stop
+    $script:DBvalidStatusGSC = Import-Clixml -Path '.\Settings\gscstatus.xml' -ErrorAction Stop
+    $script:DBvalidLifecycle = Import-Clixml -Path '.\Settings\lifecycle.xml' -ErrorAction Stop
+
     Write-Verbose "RedmineDB module data files loaded successfully"
 }
 catch {
@@ -1620,3 +1625,5 @@ Function Invoke-DecomissionDB {
 }
 
 #endregion
+
+Export-ModuleMember -Cmdlet * -Alias *

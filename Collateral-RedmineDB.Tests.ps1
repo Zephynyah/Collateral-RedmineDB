@@ -1,6 +1,6 @@
-Import-module PSRedmine -Force
+Import-module Collateral-RedmineDB -Force
 
-InModuleScope PSRedmine {
+InModuleScope Collateral-RedmineDB {
     Describe 'Redmine API' {
         Context 'New-RedmineResource' {
             Mock Send-HTTPRequest -MockWith { $true } -ParameterFilter { $Method -eq 'POST' -and $Body -and $Uri -like "/projects.json" }
