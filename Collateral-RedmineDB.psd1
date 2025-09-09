@@ -60,7 +60,7 @@
 	# Modules that must be imported into the global environment prior to importing
 	# this module
 	RequiredModules       = @(
-		# 'Microsoft.PowerShell.Utility'
+		'Microsoft.PowerShell.Utility'
 	)
 	
 	# Assemblies that must be loaded prior to importing this module
@@ -83,17 +83,17 @@
 	# Functions to export from this module
 	# For performance, list functions explicitly
 	FunctionsToExport     = @(
-		# 'Connect-Redmine',
-		# 'Disconnect-Redmine',
-		# 'Search-RedmineDB',
-		# 'New-RedmineDB',
-		# 'Get-RedmineDB',
-		# 'Edit-RedmineDB',
-		# 'Remove-RedmineDB',
-		# 'Invoke-ValidateDB',
-		# 'Edit-RedmineDBXL',
-		# 'Import-RedmineEnv',
-		# 'Import-Excel'
+		'Connect-Redmine',
+		'Disconnect-Redmine',
+		'Search-RedmineDB',
+		'New-RedmineDB',
+		'Get-RedmineDB',
+		'Edit-RedmineDB',
+		'Remove-RedmineDB',
+		'Invoke-ValidateDB',
+		'Edit-RedmineDBXL',
+		'Import-RedmineEnv',
+		'Import-Excel'
 	)
 	
 	# Cmdlets to export from this module
