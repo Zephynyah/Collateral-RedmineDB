@@ -1,0 +1,443 @@
+# PowerShell Module .gitignore
+
+# PowerShell Gallery and Package Management
+*.nupkg
+*.snupkg
+package/
+publish/
+
+# PowerShell ISE and VS Code
+.vscode/
+*.code-workspace
+.vs/
+*.suo
+*.user
+*.sln.docstates
+
+# Build and Output Directories
+bin/
+obj/
+out/
+build/
+dist/
+release/
+debug/
+
+# Test Results and Coverage
+TestResults/
+*.trx
+*.coverage
+*.coveragexml
+coverage.xml
+coverage.json
+lcov.info
+*.lcov
+
+# Pester Test Results
+TestResults.xml
+coverage.xml
+codecoverage/
+
+# Keep our test script files
+# !Test/*.ps1
+# !Tests/*.ps1
+# !*Tests.ps1
+
+# PowerShell Transcripts
+PowerShell_transcript.*
+
+# Temporary Files
+*.tmp
+*.temp
+*.cache
+*~
+.DS_Store
+Thumbs.db
+
+# Log Files
+*.log
+logs/
+*.log.*
+
+# Environment and Configuration Files
+.env
+.env.local
+.env.*.local
+config.json
+appsettings.json
+secrets.json
+*.secrets
+*.config.user
+
+# PowerShell Profile Backups
+Microsoft.PowerShell_profile.ps1.bak
+Microsoft.VSCode_profile.ps1.bak
+
+# Module Development
+*.psm1.bak
+*.psd1.bak
+*.ps1.bak
+backup/
+*.old
+
+# Documentation Build Output
+docs/_build/
+docs/site/
+help/
+
+# IDE and Editor Files
+*.swp
+*.swo
+*~
+.idea/
+*.iml
+
+# OS Generated Files
+.DS_Store
+.DS_Store?
+._*
+.Spotlight-V100
+.Trashes
+ehthumbs.db
+Thumbs.db
+desktop.ini
+
+# Windows Image File Caches
+Thumbs.db
+ehthumbs.db
+
+# Folder Config File
+Desktop.ini
+
+# Recycle Bin used on file shares
+$RECYCLE.BIN/
+
+# Mac OS
+.AppleDouble
+.LSOverride
+Icon
+
+# Directories potentially created on remote AFP share
+.AppleDB
+.AppleDesktop
+Network Trash Folder
+Temporary Items
+.apdisk
+
+# Linux
+*~
+.fuse_hidden*
+.directory
+.Trash-*
+.nfs*
+
+# PowerShell Specific
+*.ps1xml.bak
+*.psc1
+*.pssc
+
+# Azure and Cloud
+.azure/
+*.publishsettings
+*.pubxml
+*.pubxml.user
+
+# Local History (VS Code)
+.history/
+
+# Dependency directories
+node_modules/
+packages/
+
+# NuGet
+*.nupkg
+nuget.exe
+!/.nuget/packages.config
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# NUNIT
+*.VisualState.xml
+TestResult.xml
+
+# Build Results of an ATL Project
+[Dd]ebugPS/
+[Rr]eleasePS/
+dlldata.c
+
+# Benchmark Results
+BenchmarkDotNet.Artifacts/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# StyleCop
+StyleCopReport.xml
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp_proj
+*_wpftmp.csproj
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# Chutzpah Test files
+_Chutzpah*
+
+# Visual C++ cache files
+ipch/
+*.aps
+*.ncb
+*.opendb
+*.opensdf
+*.sdf
+*.cachefile
+*.VC.db
+*.VC.VC.opendb
+
+# Visual Studio profiler
+*.psess
+*.vsp
+*.vspx
+*.sap
+
+# Visual Studio Trace Files
+*.e2e
+
+# TFS 2012 Local Workspace
+$tf/
+
+# Guidance Automation Toolkit
+*.gpState
+
+# ReSharper
+_ReSharper*/
+*.[Rr]e[Ss]harper
+*.DotSettings.user
+
+# JustCode
+.JustCode
+
+# TeamCity
+_TeamCity*
+
+# DotCover
+*.dotCover
+
+# AxoCover
+.axoCover/*
+!.axoCover/settings.json
+
+# Visual Studio code coverage results
+*.coverage
+*.coveragexml
+
+# NCrunch
+_NCrunch_*
+.*crunch*.local.xml
+nCrunchTemp_*
+
+# MightyMoose
+*.mm.*
+AutoTest.Net/
+
+# Web workbench (sass)
+.sass-cache/
+
+# Installshield output folder
+[Ee]xpress/
+
+# DocProject
+DocProject/buildhelp/
+DocProject/Help/*.HxT
+DocProject/Help/*.HxC
+DocProject/Help/*.hhc
+DocProject/Help/*.hhk
+DocProject/Help/*.hhp
+DocProject/Help/Html2
+DocProject/Help/html
+
+# Click-Once directory
+publish/
+
+# Publish Web Output
+*.[Pp]ublish.xml
+*.azurePubxml
+
+# Microsoft Azure Web App publish settings
+*.PublishSettings
+
+# Microsoft Azure Build Output
+csx/
+*.build.csdef
+
+# Microsoft Azure Emulator
+ecf/
+rcf/
+
+# Windows Store app package directories and files
+AppPackages/
+BundleArtifacts/
+Package.StoreAssociation.xml
+_pkginfo.txt
+*.appx
+
+# Visual Studio cache files
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# User-specific files (MonoDevelop/Xamarin Studio)
+*.userprefs
+
+# Build results
+[Dd]ebug/
+[Dd]ebugPublic/
+[Rr]elease/
+[Rr]eleases/
+x64/
+x86/
+bld/
+[Bb]in/
+[Oo]bj/
+[Ll]og/
+
+# Visual Studio 2015/2017 cache/options directory
+.vs/
+
+# Uncomment if you have tasks that create the project's static files in wwwroot
+#wwwroot/
+
+# Visual Studio 2017 auto generated files
+Generated\ Files/
+
+# MSTest test Results
+[Tt]est[Rr]esult*/
+[Bb]uild[Ll]og.*
+
+# NUNIT
+*.VisualState.xml
+TestResult.xml
+
+# Build Results of an ATL Project
+[Dd]ebugPS/
+[Rr]eleasePS/
+dlldata.c
+
+# Benchmark Results
+BenchmarkDotNet.Artifacts/
+
+# .NET Core
+project.lock.json
+project.fragment.lock.json
+artifacts/
+
+# StyleCop
+StyleCopReport.xml
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp_proj
+*_wpftmp.csproj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# ASP.NET Scaffolding
+ScaffoldingReadMe.txt
+
+# StyleCop
+StyleCopReport.xml
+
+# Files built by Visual Studio
+*_i.c
+*_p.c
+*_h.h
+*.ilk
+*.meta
+*.obj
+*.iobj
+*.pch
+*.pdb
+*.ipdb
+*.pgc
+*.pgd
+*.rsp
+*.sbr
+*.tlb
+*.tli
+*.tlh
+*.tmp_proj
+*_wpftmp.csproj
+*.log
+*.vspscc
+*.vssscc
+.builds
+*.pidb
+*.svclog
+*.scc
+
+# Custom additions for this PowerShell module
+# Sensitive configuration files
+api-keys.txt
+credentials.json
+connection-strings.txt
+
+# Test data and temporary XML files (except the ones in Settings/)
+test-data/
+temp-*.xml
+!Settings/*.xml
+!Test/*.ps1
+!Tests/*.ps1
+
+# Module installation artifacts
+installed-modules/
+module-cache/
+
+# PowerShell execution policy backup
+execution-policy.bak
