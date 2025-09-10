@@ -38,7 +38,7 @@ catch {
 
 try {
     Import-Module .\Misc\logging.psm1 -Force -ErrorAction Stop
-    Initialize-Logger -Source "Collateral-RedmineDB" -MinimumLevel Information -Targets File
+    Initialize-Logger -Source "Collateral-RedmineDB" -MinimumLevel Information -Targets Console
 
     Import-Module .\Misc\helper.psm1 -Force -ErrorAction Stop
     Write-LogInfo "Helper module imported successfully"
@@ -46,6 +46,7 @@ try {
 catch {
     <#Do this if a terminating exception happens#>
     Write-Warning "Failed to import required modules: $($_.Exception.Message)"
+    exit
 }
 
 
@@ -117,37 +118,26 @@ foreach ($dataName in $script:SettingsFiles.Keys) {
         $data = Import-Clixml -Path $filePath -ErrorAction Stop
         Set-Variable -Name $dataName -Value $data -Scope Script -Force
         $script:LoadedData[$dataName] = $data
+        Write-LogDebug "Successfully loaded $dataName from $fileName"
         
-        Write-Debug "Successfully loaded $dataName from $fileName"
-        if (Get-Command Write-LogDebug -ErrorAction SilentlyContinue) {
-            Write-LogDebug "Successfully loaded $dataName from $fileName"
-        }
     }
     catch {
         $errorMessage = "Failed to load $dataName from $fileName`: $($_.Exception.Message)"
-        Write-Error $errorMessage
-        if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
-            Write-LogError $errorMessage -Exception $_.Exception
-        }
+        Write-LogError $errorMessage -Exception $_.Exception
         
         # For critical data files, throw to prevent module load
         if ($dataName -in @('DBStatus', 'DBType')) {
-            if (Get-Command Write-LogCritical -ErrorAction SilentlyContinue) {
-                Write-LogCritical "Critical data file failed to load: $dataName"
-            }
+            Write-LogCritical "Critical data file failed to load: $dataName"
             throw $errorMessage
         }
         
         # For non-critical files, set empty defaults and continue
         Set-Variable -Name $dataName -Value @{} -Scope Script -Force
-        Write-Warning "Using empty default for $dataName due to load failure"
-        if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
-            Write-LogWarn "Using empty default for $dataName due to load failure"
-        }
+        Write-LogWarn "Using empty default for $dataName due to load failure"
     }
 }
 
-Write-Verbose "Module data initialization completed. Loaded $($script:LoadedData.Count) of $($script:SettingsFiles.Count) data files."
+Write-LogInfo "Module data initialization completed. Loaded $($script:LoadedData.Count) of $($script:SettingsFiles.Count) data files."
 #endregion
 
 
@@ -182,16 +172,10 @@ class RedmineConnection {
     
     hidden [void] InitializeConnection([hashtable] $IWRParams) {
         if ($Script:APIKey) {
-            Write-Verbose "Using API Key authentication"
-            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
-                Write-LogInfo "Using API Key authentication"
-            }
+            Write-LogInfo "Using API Key authentication"
         }
         else {
-            Write-Verbose "Using credential-based authentication"
-            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
-                Write-LogInfo "Using credential-based authentication"
-            }
+            Write-LogInfo "Using credential-based authentication"
             $this.SignIn($IWRParams)
         }
     }
@@ -211,26 +195,20 @@ class RedmineConnection {
                 $this.CSRFToken = $response.Forms.Fields['authenticity_token']
             }
             
-            Write-Verbose "Successfully signed in to Redmine server"
-            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
-                Write-LogInfo "Successfully signed in to Redmine server"
-            }
+            Write-LogInfo "Successfully signed in to Redmine server"
+            Write-LogInfo "Successfully signed in to Redmine server"
         }
         catch {
-            Write-Error "Failed to sign in to Redmine server: $($_.Exception.Message)"
-            if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
-                Write-LogError "Failed to sign in to Redmine server" -Exception $_.Exception
-            }
+            Write-LogError "Failed to sign in to Redmine server: $($_.Exception.Message)"
+            Write-LogError "Failed to sign in to Redmine server" -Exception $_.Exception
             throw
         }
     }
     
     [void] SignOut() {
         if (-not $this.Session) {
-            Write-Warning "No active session found"
-            if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
-                Write-LogWarn "No active session found"
-            }
+            Write-LogWarn "No active session found"
+            Write-LogWarn "No active session found"
             return
         }
         
@@ -243,16 +221,12 @@ class RedmineConnection {
                 TimeoutSec = $script:ModuleConstants.DefaultTimeout
             }
             Invoke-RestMethod @requestParams
-            Write-Verbose "Successfully signed out from Redmine server"
-            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
-                Write-LogInfo "Successfully signed out from Redmine server"
-            }
+            Write-LogInfo "Successfully signed out from Redmine server"
+            Write-LogInfo "Successfully signed out from Redmine server"
         }
         catch {
-            Write-Warning "Failed to sign out properly: $($_.Exception.Message)"
-            if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
-                Write-LogWarn "Failed to sign out properly" -Exception $_.Exception
-            }
+            Write-LogWarn "Failed to sign out properly: $($_.Exception.Message)"
+            Write-LogWarn "Failed to sign out properly" -Exception $_.Exception
         }
     }
     
@@ -263,17 +237,13 @@ class RedmineConnection {
         
         try {
             $response = Invoke-RestMethod @requestParams
-            Write-Debug "Request successful: $($requestParams.Method) $($requestParams.Uri)"
-            if (Get-Command Write-LogDebug -ErrorAction SilentlyContinue) {
-                Write-LogDebug "Request successful: $($requestParams.Method) $($requestParams.Uri)"
-            }
+            Write-LogDebug "Request successful: $($requestParams.Method) $($requestParams.Uri)"
+            Write-LogDebug "Request successful: $($requestParams.Method) $($requestParams.Uri)"
             return $response
         }
         catch {
-            Write-Error "API request failed: $($_.Exception.Message)"
-            if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
-                Write-LogError "API request failed" -Exception $_.Exception
-            }
+            Write-LogError "API request failed: $($_.Exception.Message)"
+            Write-LogError "API request failed" -Exception $_.Exception
             throw
         }
     }
@@ -356,7 +326,7 @@ class DB {
         }
         
         $jsonString = $json | ConvertTo-Json -Depth 10 -Compress
-        Write-Debug "Generated JSON: $jsonString"
+        Write-LogDebug "Generated JSON: $jsonString"
         return $jsonString
     }
     
@@ -415,25 +385,16 @@ class DB {
         do {
             try {
                 $response = Invoke-RestMethod @requestParams
-                Write-Debug "API request successful: $Method $Uri"
-                if (Get-Command Write-LogDebug -ErrorAction SilentlyContinue) {
-                    Write-LogDebug "API request successful: $Method $Uri"
-                }
+                Write-LogDebug "API request successful: $Method $Uri"
                 return $response
             }
             catch {
                 $retryCount++
                 if ($retryCount -ge $script:ModuleConstants.MaxRetries) {
-                    Write-Error "API request failed after $retryCount attempts: $($_.Exception.Message)"
-                    if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
-                        Write-LogError "API request failed after $retryCount attempts: $Method $Uri" -Exception $_.Exception
-                    }
+                    Write-LogError "API request failed after $retryCount attempts: $Method $Uri" -Exception $_.Exception
                     throw
                 }
-                Write-Warning "API request failed, retrying ($retryCount/$($script:ModuleConstants.MaxRetries)): $($_.Exception.Message)"
-                if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
-                    Write-LogWarn "API request failed, retrying ($retryCount/$($script:ModuleConstants.MaxRetries)): $Method $Uri" -Exception $_.Exception
-                }
+                Write-LogWarn "API request failed, retrying ($retryCount/$($script:ModuleConstants.MaxRetries)): $Method $Uri" -Exception $_.Exception
                 Start-Sleep -Seconds $retryCount
             }
         } while ($retryCount -lt $script:ModuleConstants.MaxRetries)
@@ -455,11 +416,11 @@ class DB {
                 }
             }
             
-            Write-Verbose "Successfully retrieved DB entry with ID: $Id"
+            Write-LogInfo "Successfully retrieved DB entry with ID: $Id"
             return $dbObject
         }
         catch {
-            Write-Error "Failed to get DB entry with ID $Id`: $($_.Exception.Message)"
+            Write-LogError "Failed to get DB entry with ID $Id`: $($_.Exception.Message)"
             throw
         }
     }
@@ -486,11 +447,11 @@ class DB {
                 }
             }
             
-            Write-Verbose "Successfully retrieved DB entry with name: $Name"
+            Write-LogInfo "Successfully retrieved DB entry with name: $Name"
             return $dbObject
         }
         catch {
-            Write-Error "Failed to get DB entry with name $Name`: $($_.Exception.Message)"
+            Write-LogError "Failed to get DB entry with name $Name`: $($_.Exception.Message)"
             throw
         }
     }
@@ -522,15 +483,15 @@ class DB {
                 $offset += $limit
                 $remainingCount = $response.total_count - $offset
                 
-                Write-Debug "Retrieved $($response.db_entries.Count) entries, $remainingCount remaining"
+                Write-LogDebug "Retrieved $($response.db_entries.Count) entries, $remainingCount remaining"
                 
             } while ($remainingCount -gt 0)
             
-            Write-Verbose "Successfully retrieved $($collection.Count) DB entries"
+            Write-LogInfo "Successfully retrieved $($collection.Count) DB entries"
             return $collection
         }
         catch {
-            Write-Error "Failed to retrieve DB entries: $($_.Exception.Message)"
+            Write-LogError "Failed to retrieve DB entries: $($_.Exception.Message)"
             throw
         }
     }
@@ -563,11 +524,11 @@ class DB {
             $response = $this.Request('POST', "projects/$($this.Project.id)/db.json")
             $this.Clear()
             
-            Write-Verbose "Successfully created DB entry: $($response.db_entry.name)"
+            Write-LogInfo "Successfully created DB entry: $($response.db_entry.name)"
             return $response.db_entry
         }
         catch {
-            Write-Error "Failed to create DB entry: $($_.Exception.Message)"
+            Write-LogError "Failed to create DB entry: $($_.Exception.Message)"
             throw
         }
     }
@@ -586,10 +547,10 @@ class DB {
                 }
             }
             
-            Write-Verbose "Successfully read DB entry with ID: $($this.Id)"
+            Write-LogInfo "Successfully read DB entry with ID: $($this.Id)"
         }
         catch {
-            Write-Error "Failed to read DB entry with ID $($this.Id): $($_.Exception.Message)"
+            Write-LogError "Failed to read DB entry with ID $($this.Id): $($_.Exception.Message)"
             throw
         }
     }
@@ -603,10 +564,10 @@ class DB {
             $this.Request('PUT', "$($this.SetName)/$($this.Id).json")
             $this.Clear()
             
-            Write-Verbose "Successfully updated DB entry with ID: $($this.Id)"
+            Write-LogInfo "Successfully updated DB entry with ID: $($this.Id)"
         }
         catch {
-            Write-Error "Failed to update DB entry with ID $($this.Id): $($_.Exception.Message)"
+            Write-LogError "Failed to update DB entry with ID $($this.Id): $($_.Exception.Message)"
             throw
         }
     }
@@ -618,10 +579,10 @@ class DB {
         
         try {
             $this.Request('DELETE', "$($this.SetName)/$($this.Id).json")
-            Write-Verbose "Successfully deleted DB entry with ID: $($this.Id)"
+            Write-LogInfo "Successfully deleted DB entry with ID: $($this.Id)"
         }
         catch {
-            Write-Error "Failed to delete DB entry with ID $($this.Id): $($_.Exception.Message)"
+            Write-LogError "Failed to delete DB entry with ID $($this.Id): $($_.Exception.Message)"
             throw
         }
     }
@@ -832,7 +793,7 @@ function Connect-Redmine {
     )
     
     begin {
-        Write-Verbose "Initializing connection to Redmine server: $Server"
+        Write-LogInfo "Initializing connection to Redmine server: $Server"
 
         try {
             $uri = [System.Uri]::new($Server)
@@ -861,10 +822,10 @@ function Connect-Redmine {
                         $existingVar.Value.SignOut()
                     }
                     Remove-Variable -Name $varName -Scope Script -Force
-                    Write-Verbose "Cleaned up existing $varName variable"
+                    Write-LogInfo "Cleaned up existing $varName variable"
                 }
                 catch {
-                    Write-Warning "Failed to clean up $varName`: $($_.Exception.Message)"
+                    Write-LogWarn "Failed to clean up $varName`: $($_.Exception.Message)"
                 }
             }
         }
@@ -874,7 +835,7 @@ function Connect-Redmine {
         try {
             # Test server connectivity first
             $testUri = "$Server/projects.json?limit=1"
-            Write-Verbose "Testing connectivity to: $testUri"
+            Write-LogInfo "Testing connectivity to: $testUri"
             
             $requestParams = @{
                 Uri         = $testUri
@@ -886,12 +847,12 @@ function Connect-Redmine {
             
             switch ($PSCmdlet.ParameterSetName) {
                 'ApiKey' {
-                    Write-Verbose "Using API key authentication"
+                    Write-LogInfo "Using API key authentication"
                     $script:APIKey = $Key
                 }
                 
                 'Credential' {
-                    Write-Verbose "Using credential authentication with provided password"
+                    Write-LogInfo "Using credential authentication with provided password"
                     if (-not $Username) { 
                         $Username = Read-Host "Enter username (or press Enter for [$env:USERNAME])"
                         if ([string]::IsNullOrWhiteSpace($Username)) { 
@@ -911,7 +872,7 @@ function Connect-Redmine {
                 }
                 
                 'Interactive' {
-                    Write-Verbose "Using interactive credential authentication"
+                    Write-LogInfo "Using interactive credential authentication"
                     if (-not $Username) { 
                         $Username = Read-Host "Enter username (or press Enter for [$env:USERNAME])"
                         if ([string]::IsNullOrWhiteSpace($Username)) { 
@@ -927,18 +888,18 @@ function Connect-Redmine {
             
             # Create the connection
             $script:Redmine = [RedmineConnection]::new($Server, $requestParams)
-            
-            Write-Host "Successfully connected to Redmine server: $Server" -ForegroundColor Green
-            
+
+            Write-LogInfo "Successfully connected to Redmine server: $Server" -Success
+
             if ($script:APIKey) {
-                Write-Host "Authentication: API Key" -ForegroundColor Green
+                Write-LogInfo "Authentication: API Key" -Success
             }
             else {
-                Write-Host "Authentication: Credentials ($Username)" -ForegroundColor Green
+                Write-LogInfo "Authentication: Credentials ($Username)"
             }
         }
         catch {
-            Write-Error "Failed to connect to Redmine server: $($_.Exception.Message)"
+            Write-LogError "Failed to connect to Redmine server: $($_.Exception.Message)"
             throw
         }
     }
@@ -959,7 +920,7 @@ function Disconnect-Redmine {
     param()
     
     begin {
-        Write-Verbose "Disconnecting from Redmine server"
+        Write-LogInfo "Disconnecting from Redmine server"
     }
     
     process {
@@ -970,19 +931,19 @@ function Disconnect-Redmine {
                     $Script:Redmine.SignOut()
                 }
                 Remove-Variable -Name 'Redmine' -Scope Script -Force
-                Write-Verbose "Removed Redmine session variable"
+                Write-LogInfo "Removed Redmine session variable"
             }
             
             # Clean up API key
             if (Get-Variable -Name 'APIKey' -Scope Script -ErrorAction SilentlyContinue) {
                 Remove-Variable -Name 'APIKey' -Scope Script -Force
-                Write-Verbose "Removed API key variable"
+                Write-LogInfo "Removed API key variable"
             }
             
             Write-Host "Successfully disconnected from Redmine server" -ForegroundColor Green
         }
         catch {
-            Write-Warning "Error during disconnect: $($_.Exception.Message)"
+            Write-LogWarn "Error during disconnect: $($_.Exception.Message)"
         }
     }
 }
@@ -1162,7 +1123,7 @@ function Invoke-ValidateDB {
     )
     
     begin {
-        Write-Verbose "Validating and translating DB parameters"
+        Write-LogInfo "Validating and translating DB parameters"
     }
     
     process {
@@ -1172,7 +1133,7 @@ function Invoke-ValidateDB {
                 $statusKey = ($script:DBStatus.GetEnumerator() | Where-Object { $_.Value -eq $Status }).Key
                 if ($statusKey) {
                     $PSBoundParameters.Status = $statusKey
-                    Write-Verbose "Converted status $Status to $statusKey"
+                    Write-LogInfo "Converted status $Status to $statusKey"
                 }
             }
             
@@ -1183,19 +1144,19 @@ function Invoke-ValidateDB {
                     { $_ -in @('no', '0', 0, 'n', 'false', $false) } { $false }
                     default { [bool]$Private }
                 }
-                Write-Verbose "Converted Private parameter to boolean: $($PSBoundParameters.Private)"
+                Write-LogInfo "Converted Private parameter to boolean: $($PSBoundParameters.Private)"
             }
             
             # Validate that we have either required connection
             if (-not (Get-Variable -Name 'Redmine' -Scope Script -ErrorAction SilentlyContinue)) {
-                Write-Warning "No active Redmine connection found. Use Connect-Redmine first."
+                Write-LogWarn "No active Redmine connection found. Use Connect-Redmine first."
             }
             
-            Write-Verbose "Parameter validation completed successfully"
+            Write-LogInfo "Parameter validation completed successfully"
             return $PSBoundParameters
         }
         catch {
-            Write-Error "Parameter validation failed: $($_.Exception.Message)"
+            Write-LogError "Parameter validation failed: $($_.Exception.Message)"
             throw
         }
     }
@@ -1247,7 +1208,7 @@ function Search-RedmineDB {
     )
     
     begin {
-        Write-Verbose "Searching DB entries with keyword: '$Keyword', field: '$Field', status: '$Status'"
+        Write-LogInfo "Searching DB entries with keyword: '$Keyword', field: '$Field', status: '$Status'"
         
         # Verify connection
         if (-not $Script:Redmine -or -not $Script:Redmine.DB) {
@@ -1280,11 +1241,11 @@ function Search-RedmineDB {
             $collection = $Script:Redmine.DB.GetAll($filter)
             
             if ($collection.Count -eq 0) {
-                Write-Verbose "No entries found matching the criteria"
+                Write-LogInfo "No entries found matching the criteria"
                 return
             }
             
-            Write-Verbose "Retrieved $($collection.Count) entries, filtering by field '$Field'"
+            Write-LogInfo "Retrieved $($collection.Count) entries, filtering by field '$Field'"
             
             # Create search predicate based on field
             $searchPredicate = switch ($Field) {
@@ -1341,7 +1302,7 @@ function Search-RedmineDB {
             }
             
             $resultCount = $filteredResults.Count
-            Write-Verbose "Found $resultCount matching entries"
+            Write-LogInfo "Found $resultCount matching entries"
             
             if ($resultCount -eq 0) {
                 Write-Information "No entries found matching keyword '$Keyword' in field '$Field'" -InformationAction Continue
@@ -1353,7 +1314,7 @@ function Search-RedmineDB {
             return $results
         }
         catch {
-            Write-Error "Search operation failed: $($_.Exception.Message)"
+            Write-LogError "Search operation failed: $($_.Exception.Message)"
             throw
         }
     }
@@ -1433,8 +1394,8 @@ function Set-RedmineDB {
         }
     }
 	
-    Write-Debug 'Returned from Set-RedmineDB'
-    Write-Debug ($resource | ConvertTo-Json -Depth 4)
+    Write-LogDebug 'Returned from Set-RedmineDB'
+    Write-LogDebug ($resource | ConvertTo-Json -Depth 4)
     return $resource
 }
 
@@ -1647,7 +1608,7 @@ function Edit-RedmineDBXL {
         }
     }
     catch {
-        Write-Warning -Message $_.Exception.Message
+        Write-LogError "Failed to import Excel data" -Exception $_.Exception
         exit
     }
 
@@ -1662,7 +1623,7 @@ function Edit-RedmineDBXL {
             Else { Edit-RedmineDB @ValidateDB }
         }
         catch {
-            Write-Warning -Message $_.Exception.Message
+            Write-LogError "Failed to edit Redmine DB entry" -Exception $_.Exception
         }
     }
 }
@@ -1723,14 +1684,14 @@ function Import-RedmineEnv {
         $Env.GetEnumerator() | Foreach-Object {
             $Name, $Value = $_.Name, $_.Value
             switch ($Type) {
-                'Environment' { Set-Content -Path "env:\$Name" -Value $Value; Write-Debug '[-] Environment variables Imported....' }
-                'Regular' { Set-Variable -Name $Name -Value $Value -Scope Script; Write-Debug '[-] Regular variables Imported....' }
+                'Environment' { Set-Content -Path "env:\$Name" -Value $Value; Write-LogDebug '[-] Environment variables Imported....' }
+                'Regular' { Set-Variable -Name $Name -Value $Value -Scope Script; Write-LogDebug '[-] Regular variables Imported....' }
             }
         }
     }
     catch {
         <#Do this if a terminating exception happens#>
-        Write-Warning $_.Exception.Message
+        Write-LogError "Failed to import environment variables" -Exception $_.Exception
     }
 }
 
@@ -1777,14 +1738,14 @@ Export-ModuleMember -Cmdlet * -Alias * -Function * -Variable *
 
 # Module cleanup when removed
 $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
-    Write-Verbose "Cleaning up Collateral-RedmineDB module..."
+    Write-LogInfo "Cleaning up Collateral-RedmineDB module..."
     
     # Clean up any active connections
     if (Get-Variable -Name 'Redmine' -Scope Script -ErrorAction SilentlyContinue) {
         try {
             $script:Redmine.SignOut()
         } catch {
-            Write-Warning "Failed to sign out during module cleanup: $($_.Exception.Message)"
+            Write-LogWarn "Failed to sign out during module cleanup: $($_.Exception.Message)"
         }
     }
     
@@ -1796,10 +1757,11 @@ $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
         }
     }
     
-    Write-Verbose "Module cleanup completed."
+    Write-LogInfo "Module cleanup completed."
 }
 
 #endregion
 
 # Module initialization message
-Write-Verbose "Collateral-RedmineDB module v$($script:ModuleConstants.ApiVersion) loaded successfully"
+Write-LogInfo "Collateral-RedmineDB module v$($script:ModuleConstants.ApiVersion) loaded successfully"
+

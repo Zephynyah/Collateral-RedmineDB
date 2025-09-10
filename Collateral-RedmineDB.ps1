@@ -5,11 +5,9 @@ try {
     $key = "c5fc2de08e46b51bbd8c0a448c0b08f35e99004d"
 
     Connect-Redmine -Server "http://localhost:8080" -Key $key
-
     
     Get-LogConfiguration 
     
-    Set-LogLevel -Level Debug
     
 }
 catch {
