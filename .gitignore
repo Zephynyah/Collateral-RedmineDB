@@ -39,9 +39,6 @@ coverage.xml
 codecoverage/
 
 # Keep our test script files
-# !Test/*.ps1
-# !Tests/*.ps1
-# !*Tests.ps1
 
 # PowerShell Transcripts
 PowerShell_transcript.*
@@ -441,3 +438,6 @@ module-cache/
 
 # PowerShell execution policy backup
 execution-policy.bak
+
+
+Old/
