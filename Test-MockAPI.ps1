@@ -120,7 +120,7 @@ try {
         Private = $false
         State = 'CT'
         Building = 'CT - C Building'
-        Program = 'General Use'
+        Program = 'Underground'
     }
     $validated = Invoke-ValidateDB @validParams
     Write-Host "   ✓ Parameter validation completed" -ForegroundColor Green

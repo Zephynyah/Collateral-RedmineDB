@@ -146,7 +146,6 @@ $script:DBvalidProgram = @(
   'Staging',
   'Other - Include in Description',
   'None'
-</Objs>
 )
 
 # State hashtable (key = abbreviation, value = full name)

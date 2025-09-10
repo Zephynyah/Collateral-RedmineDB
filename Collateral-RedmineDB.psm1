@@ -133,7 +133,7 @@ catch {
 class RedmineConnection {
     hidden [string] $Server
     hidden [string] $CSRFToken
-    hidden [Microsoft.PowerShell.Commands.WebRequestSession] $Session
+    hidden [object] $Session
     [DB] $DB
     
     # Constructor
@@ -169,7 +169,7 @@ class RedmineConnection {
     
     hidden [void] SignIn([hashtable] $IWRParams) {
         try {
-            $this.Session = New-Object Microsoft.PowerShell.Commands.WebRequestSession
+            $this.Session = New-Object -TypeName "Microsoft.PowerShell.Commands.WebRequestSession" -ErrorAction SilentlyContinue
             $requestParams = $IWRParams.Clone()
             $requestParams.WebSession = $this.Session
             $requestParams.Method = 'GET'
@@ -239,7 +239,7 @@ class RedmineConnection {
 class DB {
     # Properties
     hidden [string] $Server
-    hidden [Microsoft.PowerShell.Commands.WebRequestSession] $Session
+    hidden [object] $Session
     hidden [string] $SetName = 'db'
     hidden [string] $Include = ''
     
@@ -265,7 +265,7 @@ class DB {
         $this.Issues = @()
     }
     
-    DB([string] $Server, [Microsoft.PowerShell.Commands.WebRequestSession] $Session) {
+    DB([string] $Server, [object] $Session) {
         $this.Server = $Server
         $this.Session = $Session
         $this.CustomFields = @()
@@ -441,7 +441,8 @@ class DB {
         }
         
         try {
-            $encodedName = [System.Web.HttpUtility]::UrlEncode($Name)
+            # Simple URL encoding without requiring System.Web
+            $encodedName = [System.Uri]::EscapeDataString($Name)
             $response = $this.Request('GET', "db.json?name=$encodedName&limit=1")
             
             if (-not $response.db_entries -or $response.db_entries.Count -eq 0) {
@@ -1353,9 +1354,12 @@ function Search-RedmineDB {
                     } else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
-                            $null -ne $fieldValue -and ($CaseSensitive ? 
-                                ($fieldValue -cmatch $Keyword) : 
-                                ($fieldValue -imatch $Keyword))
+                            if ($null -eq $fieldValue) { return $false }
+                            if ($CaseSensitive) {
+                                $fieldValue -cmatch $Keyword
+                            } else {
+                                $fieldValue -imatch $Keyword
+                            }
                         }
                     }
                 }
@@ -1370,9 +1374,12 @@ function Search-RedmineDB {
                     } else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
-                            $null -ne $fieldValue -and ($CaseSensitive ? 
-                                ($fieldValue -cmatch $Keyword) : 
-                                ($fieldValue -imatch $Keyword))
+                            if ($null -eq $fieldValue) { return $false }
+                            if ($CaseSensitive) {
+                                $fieldValue -cmatch $Keyword
+                            } else {
+                                $fieldValue -imatch $Keyword
+                            }
                         }
                     }
                 }
@@ -1396,9 +1403,12 @@ function Search-RedmineDB {
                     } else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
-                            $null -ne $fieldValue -and ($CaseSensitive ? 
-                                ($fieldValue -cmatch $Keyword) : 
-                                ($fieldValue -imatch $Keyword))
+                            if ($null -eq $fieldValue) { return $false }
+                            if ($CaseSensitive) {
+                                $fieldValue -cmatch $Keyword
+                            } else {
+                                $fieldValue -imatch $Keyword
+                            }
                         }
                     }
                 }
@@ -1419,12 +1429,19 @@ function Search-RedmineDB {
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             if ($fieldValue -is [array]) {
                                 $fieldValue | Where-Object { 
-                                    $CaseSensitive ? ($_ -cmatch $Keyword) : ($_ -imatch $Keyword) 
+                                    if ($CaseSensitive) {
+                                        $_ -cmatch $Keyword
+                                    } else {
+                                        $_ -imatch $Keyword
+                                    }
                                 }
                             } else {
-                                $null -ne $fieldValue -and ($CaseSensitive ? 
-                                    ($fieldValue -cmatch $Keyword) : 
-                                    ($fieldValue -imatch $Keyword))
+                                if ($null -eq $fieldValue) { return $false }
+                                if ($CaseSensitive) {
+                                    $fieldValue -cmatch $Keyword
+                                } else {
+                                    $fieldValue -imatch $Keyword
+                                }
                             }
                         }
                     }
@@ -1440,9 +1457,12 @@ function Search-RedmineDB {
                     } else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
-                            $null -ne $fieldValue -and ($CaseSensitive ? 
-                                ($fieldValue -cmatch $Keyword) : 
-                                ($fieldValue -imatch $Keyword))
+                            if ($null -eq $fieldValue) { return $false }
+                            if ($CaseSensitive) {
+                                $fieldValue -cmatch $Keyword
+                            } else {
+                                $fieldValue -imatch $Keyword
+                            }
                         }
                     }
                 }
@@ -1455,10 +1475,12 @@ function Search-RedmineDB {
                         }
                     } else {
                         { param($entry) 
-                            $null -ne $entry.Type -and $null -ne $entry.Type.name -and 
-                            ($CaseSensitive ? 
-                                ($entry.Type.name -cmatch $Keyword) : 
-                                ($entry.Type.name -imatch $Keyword))
+                            if ($null -eq $entry.Type -or $null -eq $entry.Type.name) { return $false }
+                            if ($CaseSensitive) {
+                                $entry.Type.name -cmatch $Keyword
+                            } else {
+                                $entry.Type.name -imatch $Keyword
+                            }
                         }
                     }
                 }
@@ -1470,9 +1492,12 @@ function Search-RedmineDB {
                         }
                     } else {
                         { param($entry) 
-                            $null -ne $entry.Name -and ($CaseSensitive ? 
-                                ($entry.Name -cmatch $Keyword) : 
-                                ($entry.Name -imatch $Keyword))
+                            if ($null -eq $entry.Name) { return $false }
+                            if ($CaseSensitive) {
+                                $entry.Name -cmatch $Keyword
+                            } else {
+                                $entry.Name -imatch $Keyword
+                            }
                         }
                     }
                 }
