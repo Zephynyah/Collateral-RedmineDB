@@ -95,7 +95,25 @@
 		'Remove-RedmineDB',
 		'Invoke-ValidateDB',
 		'Invoke-DecomissionDB',
-		'Import-RedmineEnv'
+		'Import-RedmineEnv',
+		'Initialize-Logger',
+		'Get-Logger',
+		'Write-LogTrace',
+		'Write-LogDebug',
+		'Write-LogInfo',
+		'Write-LogWarn',
+		'Write-LogError',
+		'Write-LogCritical',
+		'Set-LogLevel',
+		'Set-LogTargets',
+		'Get-LogConfiguration',
+		'Get-LogLevels',
+		'Get-LogTargets',
+		'Enable-FileLogging',
+		'Disable-FileLogging',
+		'Enable-ConsoleLogging',
+		'Disable-ConsoleLogging',
+		'Set-LogFile'
 	)
 	
 	# Cmdlets to export from this module

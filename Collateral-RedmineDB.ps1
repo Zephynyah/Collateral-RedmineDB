@@ -1,14 +1,23 @@
-$VerbosePreference = "Continue"
+try {
 
-Import-Module .\Collateral-RedmineDB.psm1 -Force -Verbose
+    Import-Module .\Collateral-RedmineDB.psm1 -Force
 
-$key = "c5fc2de08e46b51bbd8c0a448c0b08f35e99004d"
+    $key = "c5fc2de08e46b51bbd8c0a448c0b08f35e99004d"
 
-Connect-Redmine -Server "http://localhost:8080" -Key $key
+    Connect-Redmine -Server "http://localhost:8080" -Key $key
 
-# Connect-Redmine -Server "http://localhost:8080" -Username "admin"
-
-
-$VerbosePreference = "silentlyContinue"
-
+    
+    Get-LogConfiguration 
+    
+    Set-LogLevel -Level Debug
+    
+}
+catch {
+    <#Do this if a terminating exception happens#>
+    Write-Error "An error occurred: $_"
+}
+finally {
+    <#Do this after the try block regardless of whether an exception occurred or not#>
+    Remove-Module Collateral-RedmineDB -Force -ErrorAction SilentlyContinue
+}
 

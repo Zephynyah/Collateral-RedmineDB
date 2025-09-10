@@ -18,6 +18,12 @@
 
 using namespace System.Management.Automation
 
+# PowerShell strict mode for better error detection
+Set-StrictMode -Version 'Latest'
+
+# Import required assemblies
+Add-Type -AssemblyName 'System.Web'
+
 # Module initialization
 $script:ModuleRoot = $PSScriptRoot
 
@@ -25,85 +31,123 @@ $script:ModuleRoot = $PSScriptRoot
 try {
     Get-ChildItem -Path $script:ModuleRoot -Recurse -File | Unblock-File -ErrorAction SilentlyContinue
     Write-Verbose "Module files unblocked successfully"
-} catch {
+}
+catch {
     Write-Warning "Failed to unblock some module files: $($_.Exception.Message)"
 }
 
-# Import helper functions if available
-$helperPath = Join-Path -Path $script:ModuleRoot -ChildPath 'Misc\helper.psm1'
-if (Test-Path $helperPath) {
-    try {
-        Import-Module $helperPath -Force -DisableNameChecking -Verbose:$false
-        Write-Verbose "Helper module imported successfully"
-    } catch {
-        Write-Warning "Failed to import helper module: $($_.Exception.Message)"
-    }
-} else {
-    Write-Verbose "Helper module not found at: $helperPath"
+try {
+    Import-Module .\Misc\logging.psm1 -Force -ErrorAction Stop
+    Initialize-Logger -Source "Collateral-RedmineDB" -MinimumLevel Information -Targets File
+
+    Import-Module .\Misc\helper.psm1 -Force -ErrorAction Stop
+    Write-LogInfo "Helper module imported successfully"
 }
-
-# PowerShell strict mode for better error detection
-Set-StrictMode -Version 'Latest'
-
-# Import required assemblies
-Add-Type -AssemblyName 'System.Web'
+catch {
+    <#Do this if a terminating exception happens#>
+    Write-Warning "Failed to import required modules: $($_.Exception.Message)"
+}
 
 
 # Module constants with proper data types and validation
 $script:ModuleConstants = [PSCustomObject]@{
-    ProjectId = [int]25
-    DefaultLimit = [int]2000
-    MaxRetries = [int]3
+    ProjectId      = [int]25
+    DefaultLimit   = [int]2000
+    MaxRetries     = [int]3
     DefaultTimeout = [int]30
-    ApiVersion = [string]'1.0'
-    UserAgent = [string]"PowerShell-RedmineDB/1.0.3"
+    ApiVersion     = [string]'1.0'
+    UserAgent      = [string]"PowerShell-RedmineDB/1.0.3"
 }
 
 # Custom field IDs mapping for better maintainability
 $script:CustomFieldIds = @{
-    SystemMake = 101
-    SystemModel = 102
-    OperatingSystem = 105
-    SerialNumber = 106
-    AssetTag = 107
-    RefreshDate = 108
-    State = 109
-    RackSeat = 112
-    PeriodsProcessing = 113
-    ParentHardware = 114
-    HostName = 115
-    Programs = 116
-    GSCStatus = 117
-    Memory = 119
-    HardDriveSize = 120
-    MemoryVolatility = 124
-    Node = 125
-    Building = 126
-    Room = 127
+    SystemMake          = 101
+    SystemModel         = 102
+    OperatingSystem     = 105
+    SerialNumber        = 106
+    AssetTag            = 107
+    RefreshDate         = 108
+    State               = 109
+    RackSeat            = 112
+    PeriodsProcessing   = 113
+    ParentHardware      = 114
+    HostName            = 115
+    Programs            = 116
+    GSCStatus           = 117
+    Memory              = 119
+    HardDriveSize       = 120
+    MemoryVolatility    = 124
+    Node                = 125
+    Building            = 126
+    Room                = 127
     SafeAndDrawerNumber = 128
-    MACAddress = 150
-    HardwareLifecycle = 190
+    MACAddress          = 150
+    HardwareLifecycle   = 190
 }
 
-#region Variables - Data Import with Error Handling
-try {
-    $script:DBProperties = Import-Clixml -Path '.\Settings\building.xml' -ErrorAction Stop
-    $script:DBType = Import-Clixml -Path '.\Settings\type.xml' -ErrorAction Stop
-    $script:DBStatus = Import-Clixml -Path '.\Settings\status.xml' -ErrorAction Stop
-    $script:DBvalidOS = Import-Clixml -Path '.\Settings\opsystem.xml' -ErrorAction Stop
-    $script:DBvalidProgram = Import-Clixml -Path '.\Settings\programs.xml' -ErrorAction Stop
-    $script:DBvalidState = Import-Clixml -Path '.\Settings\state.xml' -ErrorAction Stop
-    $script:DBvalidBuilding = Import-Clixml -Path '.\Settings\building.xml' -ErrorAction Stop
-    $script:DBvalidRoom = Import-Clixml -Path '.\Settings\room.xml' -ErrorAction Stop
-    $script:DBvalidStatusGSC = Import-Clixml -Path '.\Settings\gscstatus.xml' -ErrorAction Stop
-    $script:DBvalidLifecycle = Import-Clixml -Path '.\Settings\lifecycle.xml' -ErrorAction Stop
+#region Module Data Import with Enhanced Error Handling
 
-    Write-Verbose "RedmineDB module data files loaded successfully"
+# Define settings file mapping for better maintainability
+$script:SettingsFiles = @{
+    'DBProperties'     = 'building.xml'
+    'DBType'           = 'type.xml'
+    'DBStatus'         = 'status.xml'
+    'DBvalidOS'        = 'opsystem.xml'
+    'DBvalidProgram'   = 'programs.xml'
+    'DBvalidState'     = 'state.xml'
+    'DBvalidBuilding'  = 'building.xml'
+    'DBvalidRoom'      = 'room.xml'
+    'DBvalidStatusGSC' = 'gscstatus.xml'
+    'DBvalidLifecycle' = 'lifecycle.xml'
 }
-catch {
-    Write-Error "Failed to load RedmineDB module data files: $($_.Exception.Message)"
-    throw
+
+# Import configuration data with comprehensive error handling
+$script:LoadedData = @{}
+$settingsPath = Join-Path -Path $script:ModuleRoot -ChildPath 'Settings'
+
+foreach ($dataName in $script:SettingsFiles.Keys) {
+    $fileName = $script:SettingsFiles[$dataName]
+    $filePath = Join-Path -Path $settingsPath -ChildPath $fileName
+    
+    try {
+        if (-not (Test-Path $filePath)) {
+            throw "Settings file not found: $fileName"
+        }
+        
+        $data = Import-Clixml -Path $filePath -ErrorAction Stop
+        Set-Variable -Name $dataName -Value $data -Scope Script -Force
+        $script:LoadedData[$dataName] = $data
+        
+        Write-Debug "Successfully loaded $dataName from $fileName"
+        if (Get-Command Write-LogDebug -ErrorAction SilentlyContinue) {
+            Write-LogDebug "Successfully loaded $dataName from $fileName"
+        }
+    }
+    catch {
+        $errorMessage = "Failed to load $dataName from $fileName`: $($_.Exception.Message)"
+        Write-Error $errorMessage
+        if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
+            Write-LogError $errorMessage -Exception $_.Exception
+        }
+        
+        # For critical data files, throw to prevent module load
+        if ($dataName -in @('DBStatus', 'DBType')) {
+            if (Get-Command Write-LogCritical -ErrorAction SilentlyContinue) {
+                Write-LogCritical "Critical data file failed to load: $dataName"
+            }
+            throw $errorMessage
+        }
+        
+        # For non-critical files, set empty defaults and continue
+        Set-Variable -Name $dataName -Value @{} -Scope Script -Force
+        Write-Warning "Using empty default for $dataName due to load failure"
+        if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
+            Write-LogWarn "Using empty default for $dataName due to load failure"
+        }
+    }
 }
+
+Write-Verbose "Module data initialization completed. Loaded $($script:LoadedData.Count) of $($script:SettingsFiles.Count) data files."
 #endregion
 
 
@@ -111,7 +155,7 @@ catch {
 
 class RedmineConnection {
     hidden [string] $Server
-	hidden [string] $CSRFToken
+    hidden [string] $CSRFToken
     hidden [Microsoft.PowerShell.Commands.WebRequestSession] $Session
     [DB] $DB
     
@@ -139,9 +183,15 @@ class RedmineConnection {
     hidden [void] InitializeConnection([hashtable] $IWRParams) {
         if ($Script:APIKey) {
             Write-Verbose "Using API Key authentication"
+            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
+                Write-LogInfo "Using API Key authentication"
+            }
         }
         else {
             Write-Verbose "Using credential-based authentication"
+            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
+                Write-LogInfo "Using credential-based authentication"
+            }
             $this.SignIn($IWRParams)
         }
     }
@@ -162,9 +212,15 @@ class RedmineConnection {
             }
             
             Write-Verbose "Successfully signed in to Redmine server"
+            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
+                Write-LogInfo "Successfully signed in to Redmine server"
+            }
         }
         catch {
             Write-Error "Failed to sign in to Redmine server: $($_.Exception.Message)"
+            if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
+                Write-LogError "Failed to sign in to Redmine server" -Exception $_.Exception
+            }
             throw
         }
     }
@@ -172,22 +228,31 @@ class RedmineConnection {
     [void] SignOut() {
         if (-not $this.Session) {
             Write-Warning "No active session found"
+            if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
+                Write-LogWarn "No active session found"
+            }
             return
         }
         
         try {
             $requestParams = @{
                 WebSession = $this.Session
-                Method = 'POST'
-                Uri = "$($this.Server)/logout"
-                Headers = @{ 'X-CSRF-Token' = $this.CSRFToken }
+                Method     = 'POST'
+                Uri        = "$($this.Server)/logout"
+                Headers    = @{ 'X-CSRF-Token' = $this.CSRFToken }
                 TimeoutSec = $script:ModuleConstants.DefaultTimeout
             }
             Invoke-RestMethod @requestParams
             Write-Verbose "Successfully signed out from Redmine server"
+            if (Get-Command Write-LogInfo -ErrorAction SilentlyContinue) {
+                Write-LogInfo "Successfully signed out from Redmine server"
+            }
         }
         catch {
             Write-Warning "Failed to sign out properly: $($_.Exception.Message)"
+            if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
+                Write-LogWarn "Failed to sign out properly" -Exception $_.Exception
+            }
         }
     }
     
@@ -199,10 +264,16 @@ class RedmineConnection {
         try {
             $response = Invoke-RestMethod @requestParams
             Write-Debug "Request successful: $($requestParams.Method) $($requestParams.Uri)"
+            if (Get-Command Write-LogDebug -ErrorAction SilentlyContinue) {
+                Write-LogDebug "Request successful: $($requestParams.Method) $($requestParams.Uri)"
+            }
             return $response
         }
         catch {
             Write-Error "API request failed: $($_.Exception.Message)"
+            if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
+                Write-LogError "API request failed" -Exception $_.Exception
+            }
             throw
         }
     }
@@ -252,12 +323,12 @@ class DB {
         }
         
         $propertyMappings = @{
-            'Project' = { $json.db_entry['project_id'] = $this.Project.id }
-            'Type' = { $json.db_entry['type_id'] = $this.Type.id }
-            'Status' = { $json.db_entry['status_id'] = $this.Status.id }
-            'IsPrivate' = { $json.db_entry['is_private'] = $this.IsPrivate }
+            'Project'      = { $json.db_entry['project_id'] = $this.Project.id }
+            'Type'         = { $json.db_entry['type_id'] = $this.Type.id }
+            'Status'       = { $json.db_entry['status_id'] = $this.Status.id }
+            'IsPrivate'    = { $json.db_entry['is_private'] = $this.IsPrivate }
             'CustomFields' = { $json.db_entry['custom_fields'] = $this.CustomFields }
-            'Issues' = { 
+            'Issues'       = { 
                 if ($this.Issues.Count -gt 0) {
                     $json.db_entry['issues_ids'] = $this.Issues | ForEach-Object { $_.id }
                 }
@@ -292,17 +363,17 @@ class DB {
     # Convert to PowerShell object for display
     [PSCustomObject] ToPSObject() {
         $fields = [PSCustomObject]@{
-            ID = $this.Id
-            Name = $this.Name
-            Type = $this.Type.name
-            Status = $this.Status.name
-            Private = $this.IsPrivate
-            Project = $this.Project.name
-            Tags = ($this.Tags.name -join ", ")
-            Author = $this.Author.name
+            ID          = $this.Id
+            Name        = $this.Name
+            Type        = $this.Type.name
+            Status      = $this.Status.name
+            Private     = $this.IsPrivate
+            Project     = $this.Project.name
+            Tags        = ($this.Tags.name -join ", ")
+            Author      = $this.Author.name
             Description = $this.Description
-            Created = $this.CreatedOn
-            Updated = $this.UpdatedOn
+            Created     = $this.CreatedOn
+            Updated     = $this.UpdatedOn
         }
         
         # Add custom fields
@@ -317,7 +388,7 @@ class DB {
     # Make API request with retry logic
     [PSCustomObject] Request([string] $Method, [string] $Uri) {
         $requestParams = @{ 
-            Method = $Method
+            Method     = $Method
             TimeoutSec = $script:ModuleConstants.DefaultTimeout
         }
         
@@ -345,15 +416,24 @@ class DB {
             try {
                 $response = Invoke-RestMethod @requestParams
                 Write-Debug "API request successful: $Method $Uri"
+                if (Get-Command Write-LogDebug -ErrorAction SilentlyContinue) {
+                    Write-LogDebug "API request successful: $Method $Uri"
+                }
                 return $response
             }
             catch {
                 $retryCount++
                 if ($retryCount -ge $script:ModuleConstants.MaxRetries) {
                     Write-Error "API request failed after $retryCount attempts: $($_.Exception.Message)"
+                    if (Get-Command Write-LogError -ErrorAction SilentlyContinue) {
+                        Write-LogError "API request failed after $retryCount attempts: $Method $Uri" -Exception $_.Exception
+                    }
                     throw
                 }
                 Write-Warning "API request failed, retrying ($retryCount/$($script:ModuleConstants.MaxRetries)): $($_.Exception.Message)"
+                if (Get-Command Write-LogWarn -ErrorAction SilentlyContinue) {
+                    Write-LogWarn "API request failed, retrying ($retryCount/$($script:ModuleConstants.MaxRetries)): $Method $Uri" -Exception $_.Exception
+                }
                 Start-Sleep -Seconds $retryCount
             }
         } while ($retryCount -lt $script:ModuleConstants.MaxRetries)
@@ -738,38 +818,76 @@ function Connect-Redmine {
         [ValidateNotNullOrEmpty()]
         [string] $Server,
         
-        [Parameter(ParameterSetName = 'ApiKey')]
+        [Parameter(ParameterSetName = 'ApiKey', Mandatory = $true)]
         [ValidateNotNullOrEmpty()]
-        [string] $Key,
+        [ValidateLength(40, 40)] # Redmine API keys are typically 40 characters
+        [string]$Key,
         
         [Parameter(ParameterSetName = 'Credential')]
         [Parameter(ParameterSetName = 'Interactive')]
-        [string] $Username,
+        [string]$Username,
         
         [Parameter(ParameterSetName = 'Credential')]
-        [string] $Password
+        [string]$Password
     )
     
     begin {
-        Write-Verbose "Connecting to Redmine server: $Server"
-        
-        # Clean up existing connection
-        if (Get-Variable -Name 'Redmine' -Scope Script -ErrorAction SilentlyContinue) {
-            Remove-Variable -Name 'Redmine' -Scope Script -Force
+        Write-Verbose "Initializing connection to Redmine server: $Server"
+
+        try {
+            $uri = [System.Uri]::new($Server)
+            if ($uri.Scheme -notin @('http', 'https')) {
+                throw "Invalid URL scheme. Only HTTP and HTTPS are supported."
+            }
+            if (-not $uri.IsAbsoluteUri) {
+                throw "URL must be absolute (include http:// or https://)"
+            }
         }
-        if (Get-Variable -Name 'APIKey' -Scope Script -ErrorAction SilentlyContinue) {
-            Remove-Variable -Name 'APIKey' -Scope Script -Force
+        catch {
+            throw "Invalid server URL: $_. Please provide a valid HTTP/HTTPS URL."
+        }
+        
+        # Normalize server URL
+        $Server = $Server.TrimEnd('/')
+        
+        # Clean up existing connections with proper error handling
+        $variablesToClean = @('Redmine', 'APIKey')
+        foreach ($varName in $variablesToClean) {
+            $existingVar = Get-Variable -Name $varName -Scope Script -ErrorAction SilentlyContinue
+            if ($existingVar) {
+                try {
+                    # If the variable has a cleanup method, call it
+                    if ($existingVar.Value -and $existingVar.Value.PSObject.Methods['SignOut']) {
+                        $existingVar.Value.SignOut()
+                    }
+                    Remove-Variable -Name $varName -Scope Script -Force
+                    Write-Verbose "Cleaned up existing $varName variable"
+                }
+                catch {
+                    Write-Warning "Failed to clean up $varName`: $($_.Exception.Message)"
+                }
+            }
         }
     }
     
     process {
         try {
-            $requestParams = @{}
+            # Test server connectivity first
+            $testUri = "$Server/projects.json?limit=1"
+            Write-Verbose "Testing connectivity to: $testUri"
+            
+            $requestParams = @{
+                Uri         = $testUri
+                Method      = 'HEAD'
+                TimeoutSec  = $script:ModuleConstants.DefaultTimeout
+                ErrorAction = 'Stop'
+                UserAgent   = $script:ModuleConstants.UserAgent
+            }
             
             switch ($PSCmdlet.ParameterSetName) {
                 'ApiKey' {
                     Write-Verbose "Using API key authentication"
-                    $Script:APIKey = $Key
+                    $script:APIKey = $Key
                 }
                 
                 'Credential' {
@@ -783,7 +901,8 @@ function Connect-Redmine {
                     
                     $securePassword = if ($Password) { 
                         ConvertTo-SecureString $Password -AsPlainText -Force 
-                    } else { 
+                    }
+                    else { 
                         Read-Host "Enter password for [$Username]" -AsSecureString 
                     }
                     
@@ -807,13 +926,14 @@ function Connect-Redmine {
             }
             
             # Create the connection
-            $Script:Redmine = [RedmineConnection]::new($Server, $requestParams)
+            $script:Redmine = [RedmineConnection]::new($Server, $requestParams)
             
             Write-Host "Successfully connected to Redmine server: $Server" -ForegroundColor Green
             
-            if ($Script:APIKey) {
+            if ($script:APIKey) {
                 Write-Host "Authentication: API Key" -ForegroundColor Green
-            } else {
+            }
+            else {
                 Write-Host "Authentication: Credentials ($Username)" -ForegroundColor Green
             }
         }
@@ -1136,12 +1256,12 @@ function Search-RedmineDB {
         
         # Custom field ID mappings for search
         $fieldMappings = @{
-            'model' = 102
-            'serial' = 106
-            'parent' = 114
-            'hostname' = 115
-            'program' = 116
-            'mac' = 150
+            'model'      = 102
+            'serial'     = 106
+            'parent'     = 114
+            'hostname'   = 115
+            'program'    = 116
+            'mac'        = 150
             'macaddress' = 150
         }
     }
@@ -1151,7 +1271,8 @@ function Search-RedmineDB {
             # Build filter string
             $filter = if ($Status -ne '*') {
                 "&status_id=$($script:DBStatus[$Status])"
-            } else {
+            }
+            else {
                 "&status_id=*"
             }
             
@@ -1238,87 +1359,87 @@ function Search-RedmineDB {
     }
 }
 
-Function Set-RedmineDB {
-	Param (
-		[String]$id,
-		[String]$name,
-		[String]$type,
-		[String]$status,
-		[string]$private,
-		[String]$description,
-		[String[]]$tags,
-		[String]$systemMake,
-		[String]$systemModel,
-		[String]$operatingSystem,
-		[String]$serialNumber,
-		[String]$assetTag,
-		[String]$periodsProcessing,
-		[String]$parentHardware,
-		[String]$hostname,
-		[string]$hardwareLifecycle,
-		[String[]]$programs,
-		[String]$gscStatus,
-		[String]$hardDriveSize,
-		[String]$memory,
-		[String]$memoryVolatility,
-		[String]$state,
-		[String]$building,
-		[String]$room,
-		[String]$rackSeat,
-		[String]$node,
-		[String]$safeAndDrawerNumber,
-		[string]$refreshDate,
-		[String]$macAddress,
-		[String]$notes,
-		[PSCustomObject[]]$issues
-	)
+function Set-RedmineDB {
+    Param (
+        [String]$id,
+        [String]$name,
+        [String]$type,
+        [String]$status,
+        [string]$private,
+        [String]$description,
+        [String[]]$tags,
+        [String]$systemMake,
+        [String]$systemModel,
+        [String]$operatingSystem,
+        [String]$serialNumber,
+        [String]$assetTag,
+        [String]$periodsProcessing,
+        [String]$parentHardware,
+        [String]$hostname,
+        [string]$hardwareLifecycle,
+        [String[]]$programs,
+        [String]$gscStatus,
+        [String]$hardDriveSize,
+        [String]$memory,
+        [String]$memoryVolatility,
+        [String]$state,
+        [String]$building,
+        [String]$room,
+        [String]$rackSeat,
+        [String]$node,
+        [String]$safeAndDrawerNumber,
+        [string]$refreshDate,
+        [String]$macAddress,
+        [String]$notes,
+        [PSCustomObject[]]$issues
+    )
 	
-	$resource = $Redmine.new('db')
+    $resource = $Redmine.new('db')
 	
-	foreach ($boundparam in $PSBoundParameters.GetEnumerator()) {
-		If ($null -eq $boundparam.Value) { continue }
-		Switch ($boundparam.Key) {
-			'private' { $resource.is_private = [bool]( @('yes', 1, '1', 'y', 'true') -contains $boundparam.Value.ToLower()) }
-			'type' { $resource.type = @{ id = $script:DBType[$boundparam.Value] } }
-			'status' { $resource.status = @{ id = $script:DBStatus[$boundparam.Value] } }
-			'systemMake' { $resource.custom_fields += @{ id = 101; value = $boundparam.Value } }
-			'systemModel' { $resource.custom_fields += @{ id = 102; value = $boundparam.Value } }
-			'operatingSystem' { $resource.custom_fields += @{ id = 105; value = $boundparam.Value } }
-			'serialNumber' { $resource.custom_fields += @{ id = 106; value = $boundparam.Value } }
-			'assetTag' { $resource.custom_fields += @{ id = 107; value = $boundparam.Value } }
-			'periodsProcessing' { $resource.custom_fields += @{ id = 113; value = $boundparam.Value } }
-			'parentHardware' { $resource.custom_fields += @{ id = 114; value = $boundparam.Value } }
-			'hostname' { $resource.custom_fields += @{ id = 115; value = $boundparam.Value } }
-			'hardwareLifecycle' { $resource.custom_fields += @{ id = 190; value = $boundparam.Value } }
-			'programs' { $resource.custom_fields += @{ id = 116; value = $boundparam.Value } }
-			'gscStatus' { $resource.custom_fields += @{ id = 117; value = $boundparam.Value } }
-			'memory' { $resource.custom_fields += @{ id = 119; value = $boundparam.Value } }
-			'hardDriveSize' { $resource.custom_fields += @{ id = 120; value = $boundparam.Value } }
-			'memoryVolatility' { $resource.custom_fields += @{ id = 124; value = $boundparam.Value } }
-			'state' { $resource.custom_fields += @{ id = 109; value = $boundparam.Value } }
-			'building' { $resource.custom_fields += @{ id = 126; value = $boundparam.Value } }
-			'room' { $resource.custom_fields += @{ id = 127; value = $boundparam.Value } }
-			'rackSeat' { $resource.custom_fields += @{ id = 112; value = $boundparam.Value } }
-			'node' { $resource.custom_fields += @{ id = 125; value = $boundparam.Value } }
-			'safeAndDrawerNumber' { $resource.custom_fields += @{ id = 128; value = $boundparam.Value } }
-			'refreshDate' { $resource.custom_fields += @{ id = 108; value = $boundparam.Value } }
-			'macAddress' { $resource.custom_fields += @{ id = 150; value = $boundparam.Value } }
-			'issues' { $boundparam.Value | ForEach-Object { $resource.issues += @{ id = $_ } } }
-			default {
-				If ($boundparam.Key -In $resource.PSobject.Properties.Name) {
-					$resource.$($boundparam.Key) = $boundparam.Value
-				}
-			}
-		}
-	}
+    foreach ($boundparam in $PSBoundParameters.GetEnumerator()) {
+        If ($null -eq $boundparam.Value) { continue }
+        Switch ($boundparam.Key) {
+            'private' { $resource.is_private = [bool]( @('yes', 1, '1', 'y', 'true') -contains $boundparam.Value.ToLower()) }
+            'type' { $resource.type = @{ id = $script:DBType[$boundparam.Value] } }
+            'status' { $resource.status = @{ id = $script:DBStatus[$boundparam.Value] } }
+            'systemMake' { $resource.custom_fields += @{ id = 101; value = $boundparam.Value } }
+            'systemModel' { $resource.custom_fields += @{ id = 102; value = $boundparam.Value } }
+            'operatingSystem' { $resource.custom_fields += @{ id = 105; value = $boundparam.Value } }
+            'serialNumber' { $resource.custom_fields += @{ id = 106; value = $boundparam.Value } }
+            'assetTag' { $resource.custom_fields += @{ id = 107; value = $boundparam.Value } }
+            'periodsProcessing' { $resource.custom_fields += @{ id = 113; value = $boundparam.Value } }
+            'parentHardware' { $resource.custom_fields += @{ id = 114; value = $boundparam.Value } }
+            'hostname' { $resource.custom_fields += @{ id = 115; value = $boundparam.Value } }
+            'hardwareLifecycle' { $resource.custom_fields += @{ id = 190; value = $boundparam.Value } }
+            'programs' { $resource.custom_fields += @{ id = 116; value = $boundparam.Value } }
+            'gscStatus' { $resource.custom_fields += @{ id = 117; value = $boundparam.Value } }
+            'memory' { $resource.custom_fields += @{ id = 119; value = $boundparam.Value } }
+            'hardDriveSize' { $resource.custom_fields += @{ id = 120; value = $boundparam.Value } }
+            'memoryVolatility' { $resource.custom_fields += @{ id = 124; value = $boundparam.Value } }
+            'state' { $resource.custom_fields += @{ id = 109; value = $boundparam.Value } }
+            'building' { $resource.custom_fields += @{ id = 126; value = $boundparam.Value } }
+            'room' { $resource.custom_fields += @{ id = 127; value = $boundparam.Value } }
+            'rackSeat' { $resource.custom_fields += @{ id = 112; value = $boundparam.Value } }
+            'node' { $resource.custom_fields += @{ id = 125; value = $boundparam.Value } }
+            'safeAndDrawerNumber' { $resource.custom_fields += @{ id = 128; value = $boundparam.Value } }
+            'refreshDate' { $resource.custom_fields += @{ id = 108; value = $boundparam.Value } }
+            'macAddress' { $resource.custom_fields += @{ id = 150; value = $boundparam.Value } }
+            'issues' { $boundparam.Value | ForEach-Object { $resource.issues += @{ id = $_ } } }
+            default {
+                If ($boundparam.Key -In $resource.PSobject.Properties.Name) {
+                    $resource.$($boundparam.Key) = $boundparam.Value
+                }
+            }
+        }
+    }
 	
-	Write-Debug 'Returned from Set-RedmineDB'
-	Write-Debug ($resource | ConvertTo-Json -Depth 4)
-	return $resource
+    Write-Debug 'Returned from Set-RedmineDB'
+    Write-Debug ($resource | ConvertTo-Json -Depth 4)
+    return $resource
 }
 
-Function New-RedmineDB {
-	<#
+function New-RedmineDB {
+    <#
    .SYNOPSIS
     Create a new Redmine resource
    .DESCRIPTION
@@ -1354,46 +1475,46 @@ Function New-RedmineDB {
    .LINK
     https://github.pw.utc.com/m335619/RedmineDB
 	#>
-	Param (
-		[String]$name,
-		[String]$type,
-		[String]$status,
-		[bool]$private,
-		[String]$description,
-		[String[]]$tags,
-		[String]$systemMake,
-		[String]$systemModel,
-		[String]$operatingSystem,
-		[String]$serialNumber,
-		[String]$assetTag,
-		[String]$periodsProcessing,
-		[String]$parentHardware,
-		[String]$hostname,
-		[String]$hardwareLifecycle,
-		[String[]]$programs,
-		[String]$gscStatus,
-		[String]$hardDriveSize,
-		[String]$memory,
-		[String]$memoryVolatility,
-		[String]$state,
-		[String]$building,
-		[String]$room,
-		[String]$rackSeat,
-		[String]$node,
-		[String]$safeAndDrawerNumber,
-		[string]$refreshDate,
-		[String]$macAddress,
-		[String]$notes,
-		[PSCustomObject[]]$issues
-	)
+    Param (
+        [String]$name,
+        [String]$type,
+        [String]$status,
+        [bool]$private,
+        [String]$description,
+        [String[]]$tags,
+        [String]$systemMake,
+        [String]$systemModel,
+        [String]$operatingSystem,
+        [String]$serialNumber,
+        [String]$assetTag,
+        [String]$periodsProcessing,
+        [String]$parentHardware,
+        [String]$hostname,
+        [String]$hardwareLifecycle,
+        [String[]]$programs,
+        [String]$gscStatus,
+        [String]$hardDriveSize,
+        [String]$memory,
+        [String]$memoryVolatility,
+        [String]$state,
+        [String]$building,
+        [String]$room,
+        [String]$rackSeat,
+        [String]$node,
+        [String]$safeAndDrawerNumber,
+        [string]$refreshDate,
+        [String]$macAddress,
+        [String]$notes,
+        [PSCustomObject[]]$issues
+    )
 	
-	$resource = Set-RedmineDB @PSBoundParameters
-	$resource
-	$resource.create()
+    $resource = Set-RedmineDB @PSBoundParameters
+    $resource
+    $resource.create()
 }
 
-Function Get-RedmineDB {
-	<#
+function Get-RedmineDB {
+    <#
    .SYNOPSIS
     Get Redmine resource item by id or name
    .DESCRIPTION
@@ -1405,22 +1526,22 @@ Function Get-RedmineDB {
    .LINK
     https://github.pw.utc.com/m335619/RedmineDB
 	#>
-	[CmdletBinding(DefaultParameterSetName = 'ID' )]
-	Param (
-		[Parameter(ParameterSetName = 'ID', Mandatory = $true)]
-		[String]$Id,
-		[Parameter(ParameterSetName = 'Name', Mandatory = $true)]
-		[string]$Name
-	)
+    [CmdletBinding(DefaultParameterSetName = 'ID' )]
+    Param (
+        [Parameter(ParameterSetName = 'ID', Mandatory = $true)]
+        [String]$Id,
+        [Parameter(ParameterSetName = 'Name', Mandatory = $true)]
+        [string]$Name
+    )
 
-	switch ($PsCmdlet.ParameterSetName) {
-		ID { $Redmine.db.get($id).to_psobject() }
-		Name { $Redmine.db.getByName($name).to_psobject() }
-	} 	
+    switch ($PsCmdlet.ParameterSetName) {
+        ID { $Redmine.db.get($id).to_psobject() }
+        Name { $Redmine.db.getByName($name).to_psobject() }
+    } 	
 }
 
-Function Edit-RedmineDB {
-	<#
+function Edit-RedmineDB {
+    <#
    .SYNOPSIS
     Edit a Redmine resource
    .DESCRIPTION
@@ -1442,51 +1563,51 @@ Function Edit-RedmineDB {
    .LINK
     https://github.pw.utc.com/m335619/RedmineDB
 	#>
-	[CmdletBinding(SupportsShouldProcess )]
-	Param (
-		[Parameter(Mandatory = $true)]
-		[String]$id,
-		[String]$name,
-		[String]$type,
-		[String]$status,
-		[string]$private,
-		[String]$description,
-		[String[]]$tags,
-		[String]$systemMake,
-		[String]$systemModel,
-		[String]$operatingSystem,
-		[String]$serialNumber,
-		[String]$assetTag,
-		[String]$periodsProcessing,
-		[String]$parentHardware,
-		[String]$hostname,
-		[String]$hardwareLifecycle,
-		[String[]]$programs,
-		[String]$gscStatus,
-		[String]$hardDriveSize,
-		[String]$memory,
-		[String]$memoryVolatility,
-		[String]$state,
-		[String]$building,
-		[String]$room,
-		[String]$rackSeat,
-		[String]$node,
-		[String]$safeAndDrawerNumber,
-		[string]$refreshDate,
-		[String]$macAddress,
-		[String]$notes,
-		[String[]]$issues
-	)
+    [CmdletBinding(SupportsShouldProcess )]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [String]$id,
+        [String]$name,
+        [String]$type,
+        [String]$status,
+        [string]$private,
+        [String]$description,
+        [String[]]$tags,
+        [String]$systemMake,
+        [String]$systemModel,
+        [String]$operatingSystem,
+        [String]$serialNumber,
+        [String]$assetTag,
+        [String]$periodsProcessing,
+        [String]$parentHardware,
+        [String]$hostname,
+        [String]$hardwareLifecycle,
+        [String[]]$programs,
+        [String]$gscStatus,
+        [String]$hardDriveSize,
+        [String]$memory,
+        [String]$memoryVolatility,
+        [String]$state,
+        [String]$building,
+        [String]$room,
+        [String]$rackSeat,
+        [String]$node,
+        [String]$safeAndDrawerNumber,
+        [string]$refreshDate,
+        [String]$macAddress,
+        [String]$notes,
+        [String[]]$issues
+    )
 	
-	$resource = Set-RedmineDB @PSBoundParameters
-	$resource.id = $id
-	if ($pscmdlet.ShouldProcess($($resource | ConvertTo-Json), "Edit-RedmineDB")) {
-		#$resource.update()
-	}
+    $resource = Set-RedmineDB @PSBoundParameters
+    $resource.id = $id
+    if ($pscmdlet.ShouldProcess($($resource | ConvertTo-Json), "Edit-RedmineDB")) {
+        #$resource.update()
+    }
 }
 
-Function Edit-RedmineDBXL {
-	<#
+function Edit-RedmineDBXL {
+    <#
    .SYNOPSIS
     Edit multiple Redmine DB resources using a Microsoft `.xlsx` file. 
    .DESCRIPTION
@@ -1504,50 +1625,50 @@ Function Edit-RedmineDBXL {
    .LINK
     https://github.pw.utc.com/m335619/DB-PSRedmine
 	#>
-	[CmdletBinding(DefaultParameterSetName = 'Startposition', SupportsShouldProcess )]
-	Param(
-		[Parameter(Mandatory = $true)]
-		[String]$path,
-		[Parameter(ParameterSetName = 'Startposition')]
-		[int]$StartColumn = 1,
-		[Parameter(ParameterSetName = 'Startposition')]
-		[int]$StartRow = 1,
-		[Parameter(ParameterSetName = 'ImportColumns')]
-		[int[]]$ImportColumns
-	)
+    [CmdletBinding(DefaultParameterSetName = 'Startposition', SupportsShouldProcess )]
+    Param(
+        [Parameter(Mandatory = $true)]
+        [String]$path,
+        [Parameter(ParameterSetName = 'Startposition')]
+        [int]$StartColumn = 1,
+        [Parameter(ParameterSetName = 'Startposition')]
+        [int]$StartRow = 1,
+        [Parameter(ParameterSetName = 'ImportColumns')]
+        [int[]]$ImportColumns
+    )
 
-	try {
-		# Import the module.
-		Import-Module ImportExcel -ErrorAction Stop
+    try {
+        # Import the module.
+        Import-Module ImportExcel -ErrorAction Stop
 
-		$ImportData = switch ($PsCmdlet.ParameterSetName) {
-			ImportColumns { Import-Excel -Path $path -DataOnly -ImportColumns $ImportColumns }
-			Default { Import-Excel -Path $path -DataOnly -StartRow $StartRow -StartColumn $StartColumn }
-		}
-	}
-	catch {
-		Write-Warning -Message $_.Exception.Message
-		exit
-	}
+        $ImportData = switch ($PsCmdlet.ParameterSetName) {
+            ImportColumns { Import-Excel -Path $path -DataOnly -ImportColumns $ImportColumns }
+            Default { Import-Excel -Path $path -DataOnly -StartRow $StartRow -StartColumn $StartColumn }
+        }
+    }
+    catch {
+        Write-Warning -Message $_.Exception.Message
+        exit
+    }
 
-	$ImportData | Foreach-Object { 
-		try {
-			$params = @{}
-			if ($_.program) { $_.program = $_.program.split(',').trim() }
-			$_.psobject.properties | ForEach-Object { $params[$_.Name] = $_.Value }
-			$ValidateDB = Invoke-ValidateDB @params
+    $ImportData | Foreach-Object { 
+        try {
+            $params = @{}
+            if ($_.program) { $_.program = $_.program.split(',').trim() }
+            $_.psobject.properties | ForEach-Object { $params[$_.Name] = $_.Value }
+            $ValidateDB = Invoke-ValidateDB @params
 
-			if ($WhatIf) { Edit-RedmineDB @ValidateDB -WhatIf }
-			Else { Edit-RedmineDB @ValidateDB }
-		}
-		catch {
-			Write-Warning -Message $_.Exception.Message
-		}
-	}
+            if ($WhatIf) { Edit-RedmineDB @ValidateDB -WhatIf }
+            Else { Edit-RedmineDB @ValidateDB }
+        }
+        catch {
+            Write-Warning -Message $_.Exception.Message
+        }
+    }
 }
 
-Function Remove-RedmineDB {
-	<#
+function Remove-RedmineDB {
+    <#
    .SYNOPSIS
     Remove a Redmine resource
    .DESCRIPTION
@@ -1559,22 +1680,22 @@ Function Remove-RedmineDB {
    .LINK
     https://github.pw.utc.com/m335619/RedmineDB
 	#>
-	[CmdletBinding(DefaultParameterSetName = 'ID' )]
-	Param (
-		[Parameter(ParameterSetName = 'ID', Mandatory = $true)]
-		[String]$Id,
-		[Parameter(ParameterSetName = 'Name', Mandatory = $true)]
-		[string]$Name
-	)
+    [CmdletBinding(DefaultParameterSetName = 'ID' )]
+    Param (
+        [Parameter(ParameterSetName = 'ID', Mandatory = $true)]
+        [String]$Id,
+        [Parameter(ParameterSetName = 'Name', Mandatory = $true)]
+        [string]$Name
+    )
 
-	switch ($PsCmdlet.ParameterSetName) {
-		ID { $Redmine.db.get($id).delete() }
-		Name { $Redmine.db.getByName($name).delete() }
-	}
+    switch ($PsCmdlet.ParameterSetName) {
+        ID { $Redmine.db.get($id).delete() }
+        Name { $Redmine.db.getByName($name).delete() }
+    }
 }
 
 function Import-RedmineEnv {
-	<#
+    <#
 	.SYNOPSIS
 	 Imports variables from an ENV file
 	.EXAMPLE
@@ -1587,34 +1708,34 @@ function Import-RedmineEnv {
 	.EXAMPLE
 	 Import-RedmineEnv -type regular
 	#>
-	[CmdletBinding()]
-	[Alias('Dotenv', 'Import-Env')]
-	param(
-		[ValidateNotNullOrEmpty()]
-		[String] $Path = "C:\Users\$env:USERNAME\OneDrive - Raytheon Technologies\.env",
-		# Determines whether variables are environment variables or normal
-		[ValidateSet('Environment', 'Regular')]
-		[String] $Type = 'Environment'
-	)
+    [CmdletBinding()]
+    [Alias('Dotenv', 'Import-Env')]
+    param(
+        [ValidateNotNullOrEmpty()]
+        [String] $Path = "C:\Users\$env:USERNAME\OneDrive - Raytheon Technologies\.env",
+        # Determines whether variables are environment variables or normal
+        [ValidateSet('Environment', 'Regular')]
+        [String] $Type = 'Environment'
+    )
 
-	try {
-		$Env = Get-Content -raw $Path -ErrorAction Stop | ConvertFrom-StringData
-		$Env.GetEnumerator() | Foreach-Object {
-			$Name, $Value = $_.Name, $_.Value
-			switch ($Type) {
-				'Environment' { Set-Content -Path "env:\$Name" -Value $Value; Write-Debug '[-] Environment variables Imported....' }
-				'Regular' { Set-Variable -Name $Name -Value $Value -Scope Script; Write-Debug '[-] Regular variables Imported....' }
-			}
-		}
-	}
-	catch {
-		<#Do this if a terminating exception happens#>
-		Write-Warning $_.Exception.Message
-	}
+    try {
+        $Env = Get-Content -raw $Path -ErrorAction Stop | ConvertFrom-StringData
+        $Env.GetEnumerator() | Foreach-Object {
+            $Name, $Value = $_.Name, $_.Value
+            switch ($Type) {
+                'Environment' { Set-Content -Path "env:\$Name" -Value $Value; Write-Debug '[-] Environment variables Imported....' }
+                'Regular' { Set-Variable -Name $Name -Value $Value -Scope Script; Write-Debug '[-] Regular variables Imported....' }
+            }
+        }
+    }
+    catch {
+        <#Do this if a terminating exception happens#>
+        Write-Warning $_.Exception.Message
+    }
 }
 
-Function Invoke-DecomissionDB {
-	<#
+function Invoke-DecomissionDB {
+    <#
    .SYNOPSIS
     Decomission a Redmine resource
    .DESCRIPTION
@@ -1626,30 +1747,59 @@ Function Invoke-DecomissionDB {
    .LINK
     https://github.pw.utc.com/m335619/RedmineDB
 	#>
-	[CmdletBinding(DefaultParameterSetName = 'Decommissioned' )]
-	[CmdletBinding()]
-	Param (
-		[Parameter(Mandatory = $true)]
-		[String]$Id,
+    [CmdletBinding(DefaultParameterSetName = 'Decommissioned' )]
+    [CmdletBinding()]
+    Param (
+        [Parameter(Mandatory = $true)]
+        [String]$Id,
 
-		[Parameter(ParameterSetName = 'Decommissioned')]
-		[ValidateSet("Collateral", "Destruction", "Reuse", "Returned to Vendor")]
-		[string]$Decommissioned,
+        [Parameter(ParameterSetName = 'Decommissioned')]
+        [ValidateSet("Collateral", "Destruction", "Reuse", "Returned to Vendor")]
+        [string]$Decommissioned,
 
-		[Parameter(ParameterSetName = 'Disposition')]
-		[ValidateSet("Vendor Repair", "Destroyed")]
-		[switch]$Disposition
-	)
+        [Parameter(ParameterSetName = 'Disposition')]
+        [ValidateSet("Vendor Repair", "Destroyed")]
+        [switch]$Disposition
+    )
 	
-	$Parameters = switch ($PsCmdlet.ParameterSetName) {
-		Disposition { @{ gscstatus = $Disposition ; programs = 'None' } }
-		Decommissioned { @{ gscstatus = ("Decommissioned - {0}" -f $Decommissioned) ; programs = 'None'; status = 'invalid' } }
-	}
+    $Parameters = switch ($PsCmdlet.ParameterSetName) {
+        Disposition { @{ gscstatus = $Disposition ; programs = 'None' } }
+        Decommissioned { @{ gscstatus = ("Decommissioned - {0}" -f $Decommissioned) ; programs = 'None'; status = 'invalid' } }
+    }
 		
-	$resource = Set-RedmineDB @Parameters
-	$resource.id = $Id
-	#########$resource.update()
+    $resource = Set-RedmineDB @Parameters
+    $resource.id = $Id
+    #########$resource.update()
 }
 #endregion
 
 Export-ModuleMember -Cmdlet * -Alias * -Function * -Variable *
+
+# Module cleanup when removed
+$MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
+    Write-Verbose "Cleaning up Collateral-RedmineDB module..."
+    
+    # Clean up any active connections
+    if (Get-Variable -Name 'Redmine' -Scope Script -ErrorAction SilentlyContinue) {
+        try {
+            $script:Redmine.SignOut()
+        } catch {
+            Write-Warning "Failed to sign out during module cleanup: $($_.Exception.Message)"
+        }
+    }
+    
+    # Remove script variables
+    $variablesToRemove = @('Redmine', 'APIKey', 'LoadedData', 'SettingsFiles')
+    foreach ($varName in $variablesToRemove) {
+        if (Get-Variable -Name $varName -Scope Script -ErrorAction SilentlyContinue) {
+            Remove-Variable -Name $varName -Scope Script -Force -ErrorAction SilentlyContinue
+        }
+    }
+    
+    Write-Verbose "Module cleanup completed."
+}
+
+#endregion
+
+# Module initialization message
+Write-Verbose "Collateral-RedmineDB module v$($script:ModuleConstants.ApiVersion) loaded successfully"
