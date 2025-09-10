@@ -322,21 +322,23 @@ class DB {
         $fields = [PSCustomObject]@{
             ID          = $this.Id
             Name        = $this.Name
-            Type        = $this.Type.name
-            Status      = $this.Status.name
+            Type        = if ($this.Type -and $this.Type.name) { $this.Type.name } else { $null }
+            Status      = if ($this.Status -and $this.Status.name) { $this.Status.name } else { $null }
             Private     = $this.IsPrivate
-            Project     = $this.Project.name
-            Tags        = ($this.Tags.name -join ", ")
-            Author      = $this.Author.name
+            Project     = if ($this.Project -and $this.Project.name) { $this.Project.name } else { $null }
+            Tags        = if ($this.Tags) { ($this.Tags.name -join ", ") } else { $null }
+            Author      = if ($this.Author -and $this.Author.name) { $this.Author.name } else { $null }
             Description = $this.Description
             Created     = $this.CreatedOn
             Updated     = $this.UpdatedOn
         }
         
         # Add custom fields
-        foreach ($field in $this.CustomFields) {
-            $value = if ($field.value -is [array]) { $field.value -join ", " } else { $field.value }
-            $fields | Add-Member -MemberType NoteProperty -Name $field.name -Value $value
+        if ($this.CustomFields) {
+            foreach ($field in $this.CustomFields) {
+                $value = if ($field.value -is [array]) { $field.value -join ", " } else { $field.value }
+                $fields | Add-Member -MemberType NoteProperty -Name $field.name -Value $value
+            }
         }
         
         return $fields
@@ -397,9 +399,30 @@ class DB {
             $response = $this.Request('GET', "$($this.SetName)/$Id.json$($this.Include)")
             $dbObject = [DB]::new($this.Server, $this.Session)
             
-            foreach ($property in $response.db_entry.PSObject.Properties.Name) {
-                if ($dbObject.PSObject.Properties.Name -contains $property) {
-                    $dbObject.$property = $response.db_entry.$property
+            # Map JSON properties to DB object properties with proper case and naming
+            $propertyMap = @{
+                'id' = 'Id'
+                'name' = 'Name'
+                'description' = 'Description'
+                'is_private' = 'IsPrivate'
+                'project' = 'Project'
+                'status' = 'Status'
+                'type' = 'Type'
+                'author' = 'Author'
+                'tags' = 'Tags'
+                'custom_fields' = 'CustomFields'
+                'issues' = 'Issues'
+                'created_on' = 'CreatedOn'
+                'updated_on' = 'UpdatedOn'
+            }
+            
+            foreach ($jsonProperty in $response.db_entry.PSObject.Properties.Name) {
+                if ($propertyMap.ContainsKey($jsonProperty)) {
+                    $dbProperty = $propertyMap[$jsonProperty]
+                    Write-LogInfo "Mapping JSON property '$jsonProperty' to DB property '$dbProperty'"
+                    Write-LogInfo "  JSON value: $($response.db_entry.$jsonProperty)"
+                    $dbObject.$dbProperty = $response.db_entry.$jsonProperty
+                    Write-LogInfo "  DB property after mapping: $($dbObject.$dbProperty)"
                 }
             }
             
@@ -459,11 +482,31 @@ class DB {
                 
                 foreach ($entry in $response.db_entries) {
                     $dbItem = [DB]::new($this.Server, $this.Session)
-                    foreach ($property in $entry.PSObject.Properties.Name) {
-                        if ($dbItem.PSObject.Properties.Name -contains $property) {
-                            $dbItem.$property = $entry.$property
+                    
+                    # Map JSON properties to DB object properties with proper case and naming
+                    $propertyMap = @{
+                        'id' = 'Id'
+                        'name' = 'Name'
+                        'description' = 'Description'
+                        'is_private' = 'IsPrivate'
+                        'project' = 'Project'
+                        'status' = 'Status'
+                        'type' = 'Type'
+                        'author' = 'Author'
+                        'tags' = 'Tags'
+                        'custom_fields' = 'CustomFields'
+                        'issues' = 'Issues'
+                        'created_on' = 'CreatedOn'
+                        'updated_on' = 'UpdatedOn'
+                    }
+                    
+                    foreach ($jsonProperty in $entry.PSObject.Properties.Name) {
+                        if ($propertyMap.ContainsKey($jsonProperty)) {
+                            $dbProperty = $propertyMap[$jsonProperty]
+                            $dbItem.$dbProperty = $entry.$jsonProperty
                         }
                     }
+                    
                     $collection[$dbItem.Id] = $dbItem
                 }
                 
@@ -683,6 +726,10 @@ class ValidateProgram : ValidatorBase {
     static [array] $ValidPrograms = $script:DBvalidProgram
     [string[]] $Programs
 
+    ValidateProgram() {
+        # Default constructor
+    }
+
     ValidateProgram([object] $Value) {
         if (-not $Value) { 
             return 
@@ -728,6 +775,30 @@ class ValidateLifecycle : ValidatorBase {
 
 
 #region Functions
+
+function ConvertTo-RedmineCustomField {
+    <#
+    .SYNOPSIS
+        Converts custom field data to Redmine API format.
+    .DESCRIPTION
+        Helper function to properly format custom fields for Redmine API requests.
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $true)]
+        [hashtable]$CustomFields
+    )
+    
+    $formattedFields = foreach ($field in $CustomFields.GetEnumerator()) {
+        @{
+            id = $field.Key
+            value = $field.Value
+        }
+    }
+    
+    return $formattedFields
+}
+
 
 function Connect-Redmine {
     <#
@@ -1060,7 +1131,7 @@ function Invoke-ValidateDB {
         [Alias("Hardware Lifecycle", "hardware_lifecycle")]
         [ValidateLifecycle] $HardwareLifecycle,
         
-        [ValidateProgram] $Program = 'Underground',
+        [string] $Program,
         
         [Alias("GSC Status", "gsc_status")]
         [ValidateGSCStatus] $GSCStatus,
@@ -1115,6 +1186,15 @@ function Invoke-ValidateDB {
     
     process {
         try {
+            # Validate Program parameter if provided
+            if ($Program) {
+                $validPrograms = $script:DBvalidProgram
+                $matchedProgram = $validPrograms | Where-Object { $_.ToLower() -eq $Program.ToLower() }
+                if (-not $matchedProgram) {
+                    throw "Invalid program: [$Program]. Valid programs are: $($validPrograms -join ', ')"
+                }
+            }
+            
             # Handle status number to string conversion
             if ($Status -in @('0', '1', '2', 0, 1, 2)) {
                 $statusKey = ($script:DBStatus.GetEnumerator() | Where-Object { $_.Value -eq $Status }).Key
@@ -1253,7 +1333,7 @@ function Search-RedmineDB {
             Write-LogDebug "Applying status filter: $statusFilter"
             
             # Retrieve all entries with status filter
-            $collection = $Script:Redmine.DB.GetAll($statusFi   |          
+            $collection = $Script:Redmine.DB.GetAll($statusFilter)
             if ($collection.Count -eq 0) {
                 Write-LogInfo "No entries found matching the status criteria"
                 return @()
@@ -1627,8 +1707,8 @@ function Get-RedmineDB {
     )
 
     switch ($PsCmdlet.ParameterSetName) {
-        ID { $Redmine.db.get($id).to_psobject() }
-        Name { $Redmine.db.getByName($name).to_psobject() }
+        ID { $Script:Redmine.DB.Get($id).ToPSObject() }
+        Name { $Script:Redmine.DB.GetByName($name).ToPSObject() }
     } 	
 }
 
