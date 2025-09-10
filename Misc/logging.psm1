@@ -32,8 +32,7 @@ enum LogLevel {
 enum LogTarget {
     Console = 1
     File = 2
-    EventLog = 4
-    All = 7
+    All = 3
 }
 
 # Logger configuration class
@@ -49,16 +48,14 @@ class LoggerConfig {
     [int]$MaxLogFileSize = 10MB
     [int]$MaxLogFiles = 5
     [string]$DateTimeFormat = "yyyy-MM-dd HH:mm:ss.fff"
-    [string]$EventLogSource = "Collateral-RedmineDB"
-    [string]$EventLogName = "Application"
     [bool]$EnableColorOutput = $true
     [hashtable]$LevelColors = @{
-        'Trace' = 'Gray'
-        'Debug' = 'Cyan'
+        'Trace'       = 'Gray'
+        'Debug'       = 'Cyan'
         'Information' = 'White'
-        'Warning' = 'Yellow'
-        'Error' = 'Red'
-        'Critical' = 'Magenta'
+        'Warning'     = 'Yellow'
+        'Error'       = 'Red'
+        'Critical'    = 'Magenta'
     }
 
     LoggerConfig() {
@@ -79,44 +76,17 @@ class Logger {
     [LoggerConfig]$Config
     [string]$Source
     hidden [System.IO.StreamWriter]$FileWriter
-    hidden [bool]$EventLogAvailable
 
     Logger([string]$source) {
         $this.Config = [LoggerConfig]::new()
         $this.Source = $source
-        $this.EventLogAvailable = $this.InitializeEventLog()
         $this.InitializeFileLogging()
     }
 
     Logger([string]$source, [LoggerConfig]$config) {
         $this.Config = $config
         $this.Source = $source
-        $this.EventLogAvailable = $this.InitializeEventLog()
         $this.InitializeFileLogging()
-    }
-
-    # Initialize event log source
-    hidden [bool] InitializeEventLog() {
-        try {
-            if ($this.Config.Targets -band [LogTarget]::EventLog) {
-                if (-not [System.Diagnostics.EventLog]::SourceExists($this.Config.EventLogSource)) {
-                    # Only create if running as administrator
-                    $principal = [Security.Principal.WindowsPrincipal][Security.Principal.WindowsIdentity]::GetCurrent()
-                    if ($principal.IsInRole([Security.Principal.WindowsBuiltInRole]::Administrator)) {
-                        [System.Diagnostics.EventLog]::CreateEventSource($this.Config.EventLogSource, $this.Config.EventLogName)
-                    }
-                    else {
-                        Write-Warning "Cannot create EventLog source '$($this.Config.EventLogSource)' without administrator privileges. EventLog logging disabled."
-                        return $false
-                    }
-                }
-                return $true
-            }
-        }
-        catch {
-            Write-Warning "Failed to initialize EventLog: $($_.Exception.Message). EventLog logging disabled."
-        }
-        return $false
     }
 
     # Initialize file logging
@@ -128,7 +98,8 @@ class Logger {
                     try {
                         $this.FileWriter.Close()
                         $this.FileWriter.Dispose()
-                    } catch {
+                    }
+                    catch {
                         # Ignore errors when closing existing writer
                     }
                     $this.FileWriter = $null
@@ -139,8 +110,29 @@ class Logger {
                 if (-not (Test-Path $logDir)) {
                     New-Item -Path $logDir -ItemType Directory -Force | Out-Null
                 }
-                $this.FileWriter = [System.IO.StreamWriter]::new($this.Config.LogFilePath, $true, [System.Text.Encoding]::UTF8)
-                $this.FileWriter.AutoFlush = $true
+                
+                # Try to open the file with retry logic for locked files
+                $retryCount = 0
+                $maxRetries = 3
+                $retryDelay = 100 # milliseconds
+                
+                while ($retryCount -lt $maxRetries) {
+                    try {
+                        $this.FileWriter = [System.IO.StreamWriter]::new($this.Config.LogFilePath, $true, [System.Text.Encoding]::UTF8)
+                        $this.FileWriter.AutoFlush = $true
+                        break # Success, exit retry loop
+                    }
+                    catch [System.IO.IOException] {
+                        $retryCount++
+                        if ($retryCount -lt $maxRetries) {
+                            Start-Sleep -Milliseconds $retryDelay
+                            $retryDelay *= 2 # Exponential backoff
+                        }
+                        else {
+                            throw # Re-throw the exception if all retries failed
+                        }
+                    }
+                }
             }
             catch {
                 Write-Warning "Failed to initialize file logging: $($_.Exception.Message). File logging disabled."
@@ -231,7 +223,8 @@ class Logger {
                 if ($fileName -ne 'logging.psm1' -and $caller.FunctionName -ne '<ScriptBlock>') {
                     $functionName = $caller.FunctionName
                     # Use the module source name instead of the file name for better readability
-                    return "$($this.Source)::$functionName"
+                    # return "$($this.Source)::$functionName"
+                    return "$functionName"
                 }
             }
             
@@ -239,7 +232,8 @@ class Logger {
             if ($callStack.Count -gt 4) {
                 $caller = $callStack[4]
                 $functionName = if ($caller.FunctionName -ne '<ScriptBlock>') { $caller.FunctionName } else { 'Script' }
-                return "$($this.Source)::$functionName"
+                # return "$($this.Source)::$functionName" # Use the module source name instead of the file name for better readability
+                return "$functionName"
             }
         }
         catch {
@@ -280,7 +274,8 @@ class Logger {
                 # Check if the FileWriter is still valid
                 if ($this.FileWriter.BaseStream -and $this.FileWriter.BaseStream.CanWrite) {
                     $this.FileWriter.WriteLine($formattedMessage)
-                } else {
+                }
+                else {
                     # Re-initialize file logging if the writer is invalid
                     $this.InitializeFileLogging()
                     if ($this.FileWriter -and $this.FileWriter.BaseStream -and $this.FileWriter.BaseStream.CanWrite) {
@@ -293,16 +288,12 @@ class Logger {
                 # Try to re-initialize file logging
                 try {
                     $this.InitializeFileLogging()
-                } catch {
+                }
+                catch {
                     # If re-initialization fails, disable file logging
                     $this.Config.Targets = $this.Config.Targets -band (-bnot [LogTarget]::File)
                 }
             }
-        }
-
-        # Write to event log
-        if (($this.Config.Targets -band [LogTarget]::EventLog) -and $this.EventLogAvailable) {
-            $this.WriteToEventLog($level, $fullMessage)
         }
     }
 
@@ -310,28 +301,10 @@ class Logger {
     hidden [void] WriteToConsole([LogLevel]$level, [string]$message) {
         if ($this.Config.EnableColorOutput -and $this.Config.LevelColors.ContainsKey($level.ToString())) {
             $color = $this.Config.LevelColors[$level.ToString()]
-            Write-Host $message -ForegroundColor $color
+           if ($message.ToString() -ilike "*success*") { Write-Host $message -ForegroundColor Green } else { Write-Host $message -ForegroundColor $color }
         }
         else {
-            Write-Host $message
-        }
-    }
-
-    # Write to Windows Event Log
-    hidden [void] WriteToEventLog([LogLevel]$level, [string]$message) {
-        try {
-            $eventType = switch ($level) {
-                ([LogLevel]::Error) { [System.Diagnostics.EventLogEntryType]::Error }
-                ([LogLevel]::Critical) { [System.Diagnostics.EventLogEntryType]::Error }
-                ([LogLevel]::Warning) { [System.Diagnostics.EventLogEntryType]::Warning }
-                default { [System.Diagnostics.EventLogEntryType]::Information }
-            }
-
-            $eventId = [int]$level * 100 + 1
-            [System.Diagnostics.EventLog]::WriteEntry($this.Config.EventLogSource, $message, $eventType, $eventId)
-        }
-        catch {
-            Write-Warning "Failed to write to EventLog: $($_.Exception.Message)"
+            if ($message.ToString() -ilike "*success*") { Write-Host $message -ForegroundColor Green } else { Write-Host $message }
         }
     }
 
@@ -531,15 +504,8 @@ function Write-LogInfo {
         [Exception]$Exception,
         
         [Parameter(Mandatory = $false)]
-        [string]$Source,
-
-        [Parameter(Mandatory = $false)]
-        [switch]$Success
+        [string]$Source
     )
-
-    if ($Success) {
-        $Source = "SUCCESS"
-    }
     
     $logger = Get-Logger
     $logger.Info($Message, $Exception, $Source)
@@ -626,11 +592,11 @@ function Get-LogConfiguration {
     
     $logger = Get-Logger
     return [PSCustomObject]@{
-        MinimumLevel = $logger.GetLogLevel()
-        Targets = $logger.GetLogTargets()
-        LogFilePath = $logger.GetLogFilePath()
+        MinimumLevel      = $logger.GetLogLevel()
+        Targets           = $logger.GetLogTargets()
+        LogFilePath       = $logger.GetLogFilePath()
         EnableColorOutput = $logger.Config.EnableColorOutput
-        Source = $logger.Source
+        Source            = $logger.Source
     }
 }
 
@@ -638,22 +604,21 @@ function Get-LogConfiguration {
 
 function Get-LogLevels {
     return @{
-        Trace = 0
-        Debug = 1
+        Trace       = 0
+        Debug       = 1
         Information = 2
-        Warning = 3
-        Error = 4
-        Critical = 5
-        None = 6
+        Warning     = 3
+        Error       = 4
+        Critical    = 5
+        None        = 6
     }
 }
 
 function Get-LogTargets {
     return @{
         Console = 1
-        File = 2
-        EventLog = 4
-        All = 7
+        File    = 2
+        All     = 3
     }
 }
 
@@ -748,6 +713,7 @@ Export-ModuleMember -Function @(
 
 # Module cleanup
 $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
+    Write-LogInfo "Cleaning up Logging module..."
     if ($script:GlobalLogger) {
         $script:GlobalLogger.Dispose()
     }

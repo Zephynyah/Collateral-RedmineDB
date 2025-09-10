@@ -6,7 +6,10 @@ try {
 
     Connect-Redmine -Server "http://localhost:8080" -Key $key
     
-    Get-LogConfiguration 
+    # Optionally enable file logging after successful connection
+    Enable-FileLogging
+    
+    # Get-LogConfiguration 
     
     
 }

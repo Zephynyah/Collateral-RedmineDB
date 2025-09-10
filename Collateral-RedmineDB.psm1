@@ -793,7 +793,7 @@ function Connect-Redmine {
     )
     
     begin {
-        Write-LogInfo "Initializing connection to Redmine server: $Server" -Source "RedmineDB"
+        Write-LogInfo "Initializing connection to Redmine server: $Server"
 
         try {
             $uri = [System.Uri]::new($Server)
@@ -864,7 +864,7 @@ function Connect-Redmine {
                         ConvertTo-SecureString $Password -AsPlainText -Force 
                     }
                     else { 
-                        Read-Host "Enter password for [$Username]" -AsSecureString 
+                        Read-Host "Enter password for [$Username]" -AsSecureString
                     }
                     
                     $credential = [PSCredential]::new($Username, $securePassword)
@@ -889,17 +889,17 @@ function Connect-Redmine {
             # Create the connection
             $script:Redmine = [RedmineConnection]::new($Server, $requestParams)
 
-            Write-LogInfo "Successfully connected to Redmine server: $Server" -Success
+            Write-LogInfo "Successfully connected to Redmine server: $Server" -Source 'SUCCESS'
 
             if ($script:APIKey) {
-                Write-LogInfo "Authentication: API Key" -Success
+                Write-LogInfo "Authentication: API Key" -Source 'SUCCESS'
             }
             else {
                 Write-LogInfo "Authentication: Credentials ($Username)"
             }
         }
         catch {
-            Write-LogError "Failed to connect to Redmine server: $($_.Exception.Message)"
+            Write-LogError "Failed to connect to Redmine server: $($_.Exception.Message)" -Exception $_.Exception
             throw
         }
     }
