@@ -38,10 +38,13 @@ catch {
 
 try {
     Import-Module .\Misc\logging.psm1 -Force -ErrorAction Stop
-    Initialize-Logger -Source "RedmineDB" -MinimumLevel Information -Targets Console
+    Initialize-Logger -Source "RedmineDB" -MinimumLevel Information -Targets All
 
     Import-Module .\Misc\helper.psm1 -Force -ErrorAction Stop
     Write-LogInfo "Helper module imported successfully"
+    
+    Import-Module .\Misc\settings.psm1 -Force -ErrorAction Stop
+    Write-LogInfo "Settings module imported successfully"
 }
 catch {
     <#Do this if a terminating exception happens#>
@@ -86,58 +89,42 @@ $script:CustomFieldIds = @{
     HardwareLifecycle   = 190
 }
 
-#region Module Data Import with Enhanced Error Handling
+#region Module Data Import from Settings Module
 
-# Define settings file mapping for better maintainability
-$script:SettingsFiles = @{
-    'DBProperties'     = 'building.xml'
-    'DBType'           = 'type.xml'
-    'DBStatus'         = 'status.xml'
-    'DBvalidOS'        = 'opsystem.xml'
-    'DBvalidProgram'   = 'programs.xml'
-    'DBvalidState'     = 'state.xml'
-    'DBvalidBuilding'  = 'building.xml'
-    'DBvalidRoom'      = 'room.xml'
-    'DBvalidStatusGSC' = 'gscstatus.xml'
-    'DBvalidLifecycle' = 'lifecycle.xml'
-}
-
-# Import configuration data with comprehensive error handling
-$script:LoadedData = @{}
-$settingsPath = Join-Path -Path $script:ModuleRoot -ChildPath 'Settings'
-
-foreach ($dataName in $script:SettingsFiles.Keys) {
-    $fileName = $script:SettingsFiles[$dataName]
-    $filePath = Join-Path -Path $settingsPath -ChildPath $fileName
+# Load all settings data from the settings module (no file I/O required)
+try {
+    $settingsDataNames = Get-AvailableSettings
+    $script:LoadedData = @{}
     
-    try {
-        if (-not (Test-Path $filePath)) {
-            throw "Settings file not found: $fileName"
+    foreach ($dataName in $settingsDataNames) {
+        try {
+            $data = Get-SettingsData -DataName $dataName
+            Set-Variable -Name $dataName -Value $data -Scope Script -Force
+            $script:LoadedData[$dataName] = $data
+            Write-LogDebug "Successfully loaded $dataName from settings module"
         }
-        
-        $data = Import-Clixml -Path $filePath -ErrorAction Stop
-        Set-Variable -Name $dataName -Value $data -Scope Script -Force
-        $script:LoadedData[$dataName] = $data
-        Write-LogDebug "Successfully loaded $dataName from $fileName"
-        
-    }
-    catch {
-        $errorMessage = "Failed to load $dataName from $fileName`: $($_.Exception.Message)"
-        Write-LogError $errorMessage -Exception $_.Exception
-        
-        # For critical data files, throw to prevent module load
-        if ($dataName -in @('DBStatus', 'DBType')) {
-            Write-LogCritical "Critical data file failed to load: $dataName"
-            throw $errorMessage
+        catch {
+            $errorMessage = "Failed to load $dataName from settings module: $($_.Exception.Message)"
+            Write-LogError $errorMessage -Exception $_.Exception
+            
+            # For critical data, throw to prevent module load
+            if ($dataName -in @('DBStatus', 'DBType')) {
+                Write-LogCritical "Critical data failed to load: $dataName"
+                throw $errorMessage
+            }
+            
+            # For non-critical data, set empty defaults and continue
+            Set-Variable -Name $dataName -Value @{} -Scope Script -Force
+            Write-LogWarn "Using empty default for $dataName due to load failure"
         }
-        
-        # For non-critical files, set empty defaults and continue
-        Set-Variable -Name $dataName -Value @{} -Scope Script -Force
-        Write-LogWarn "Using empty default for $dataName due to load failure"
     }
+    
+    Write-LogInfo "Module data initialization completed. Loaded $($script:LoadedData.Count) data sets from settings module (no file I/O required)."
 }
-
-Write-LogInfo "Module data initialization completed. Loaded $($script:LoadedData.Count) of $($script:SettingsFiles.Count) data files."
+catch {
+    Write-LogCritical "Failed to initialize module data from settings module: $($_.Exception.Message)"
+    throw
+}
 #endregion
 
 

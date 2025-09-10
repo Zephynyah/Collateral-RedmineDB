@@ -31,6 +31,29 @@ A comprehensive PowerShell module providing advanced Excel (XLSX) and CSV data p
 - **File Conversion**: Convert between CSV and Excel formats
 - **Data Validation**: Comprehensive validation for CSV file structure and content
 
+### settings.psm1 🆕
+A high-performance settings module that provides embedded configuration data for Collateral-RedmineDB, eliminating XML file I/O for faster module loading.
+
+#### Key Features
+- **In-Memory Data**: All configuration data embedded in module (no file I/O required)
+- **Fast Loading**: Eliminates XML file parsing overhead during module initialization
+- **Comprehensive Data Sets**: Contains all reference data for buildings, rooms, states, equipment types, and more
+- **Key-Value Mappings**: Optimized data structures including hashtables for efficient lookups
+- **Backward Compatibility**: Maintains existing variable names and access patterns
+- **Runtime Access**: Functions to retrieve specific data sets programmatically
+
+#### Available Data Sets
+- **DBvalidBuilding**: Building locations and facilities (40+ entries)
+- **DBvalidRoom**: All facility rooms and locations (215 entries)
+- **DBvalidState**: US states with abbreviation-to-name mapping (51 entries)
+- **DBvalidOS**: Operating systems and platforms (27 entries)
+- **DBvalidProgram**: Software programs and purposes (24 entries)
+- **DBvalidStatusGSC**: GSC status values (9 entries)
+- **DBvalidLifecycle**: Equipment lifecycle states (9 entries)
+- **DBType**: Equipment types with numeric IDs (36 types)
+- **DBStatus**: Validation status codes (3 states)
+- **DBProperties**: Configuration settings and parameters (39 settings)
+
 ## Functions Reference
 
 ### HTTP Communication Functions
@@ -238,6 +261,84 @@ Exception logging includes the full exception message and optionally stack trace
 - Warning: Yellow
 - Error: Red
 - Critical: Magenta
+
+### Settings Module Functions
+
+#### `Get-SettingsData`
+Retrieve specific configuration data sets from the settings module.
+
+**Purpose:**
+Provides programmatic access to embedded configuration data without requiring XML file I/O. All data is pre-loaded in memory for optimal performance.
+
+**Parameters:**
+- `DataName` - Name of the data set to retrieve (required)
+  - Valid values: 'DBProperties', 'DBType', 'DBStatus', 'DBvalidOS', 'DBvalidProgram', 'DBvalidState', 'DBvalidBuilding', 'DBvalidRoom', 'DBvalidStatusGSC', 'DBvalidLifecycle'
+
+**Examples:**
+```powershell
+# Get state abbreviations and full names
+$states = Get-SettingsData -DataName "DBvalidState"
+$fullName = $states['CA']  # Returns "California"
+$allStates = $states.Keys  # Returns all state abbreviations
+
+# Get equipment types
+$types = Get-SettingsData -DataName "DBType"
+$workstationId = $types['Workstation']  # Returns 1
+
+# Get all available rooms
+$rooms = Get-SettingsData -DataName "DBvalidRoom"
+Write-Host "Total rooms: $($rooms.Count)"  # Displays "Total rooms: 215"
+
+# Check validation status codes
+$statusCodes = Get-SettingsData -DataName "DBStatus"
+$validCode = $statusCodes['valid']  # Returns 0
+```
+
+#### `Get-AvailableSettings`
+Get a list of all available data set names.
+
+**Purpose:**
+Returns an array of all valid data set names that can be used with `Get-SettingsData`.
+
+**Example:**
+```powershell
+# List all available data sets
+$available = Get-AvailableSettings
+foreach ($dataSet in $available) {
+    $data = Get-SettingsData -DataName $dataSet
+    Write-Host "$dataSet has $($data.Count) entries"
+}
+```
+
+#### Direct Variable Access
+All data sets are also available as module variables for backward compatibility:
+
+```powershell
+# Direct access to variables (after importing the main module)
+$californiaName = $DBvalidState['CA']  # "California"
+$totalRooms = $DBvalidRoom.Count       # 215
+$serverTypeId = $DBType['Server']      # 4
+
+# Check if a state abbreviation exists
+if ($DBvalidState.ContainsKey('TX')) {
+    Write-Host "Texas: $($DBvalidState['TX'])"
+}
+
+# Get all equipment type names
+$equipmentTypes = $DBType.Keys | Sort-Object
+```
+
+#### Key Data Structure Changes
+- **DBvalidState**: Now a hashtable with state abbreviations as keys and full names as values
+  - Example: `$DBvalidState['MA']` returns "Massachusetts"
+  - Previous: Array of full state names
+  - Current: Hashtable for efficient lookups
+
+- **Performance Benefits**: 
+  - No XML file I/O during module loading
+  - Faster lookups using hashtable keys
+  - Reduced memory footprint
+  - Improved module initialization time
 
 ### Excel Functions
 

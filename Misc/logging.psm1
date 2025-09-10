@@ -111,14 +111,21 @@ class Logger {
                     New-Item -Path $logDir -ItemType Directory -Force | Out-Null
                 }
                 
-                # Try to open the file with retry logic for locked files
+                # Try to open the file with shared access to allow multiple processes
                 $retryCount = 0
                 $maxRetries = 3
                 $retryDelay = 100 # milliseconds
                 
                 while ($retryCount -lt $maxRetries) {
                     try {
-                        $this.FileWriter = [System.IO.StreamWriter]::new($this.Config.LogFilePath, $true, [System.Text.Encoding]::UTF8)
+                        # Use FileStream with shared read/write access to allow multiple processes
+                        $fileStream = [System.IO.FileStream]::new(
+                            $this.Config.LogFilePath,
+                            [System.IO.FileMode]::Append,
+                            [System.IO.FileAccess]::Write,
+                            [System.IO.FileShare]::ReadWrite
+                        )
+                        $this.FileWriter = [System.IO.StreamWriter]::new($fileStream, [System.Text.Encoding]::UTF8)
                         $this.FileWriter.AutoFlush = $true
                         break # Success, exit retry loop
                     }
