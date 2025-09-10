@@ -18,22 +18,45 @@
 
 using namespace System.Management.Automation
 
+# Module initialization
+$script:ModuleRoot = $PSScriptRoot
+
 # Unblock all files in the module directory to avoid execution issues
-Get-ChildItem -Path $PSScriptRoot -Recurse | Unblock-File
+try {
+    Get-ChildItem -Path $script:ModuleRoot -Recurse -File | Unblock-File -ErrorAction SilentlyContinue
+    Write-Verbose "Module files unblocked successfully"
+} catch {
+    Write-Warning "Failed to unblock some module files: $($_.Exception.Message)"
+}
 
-# Module-level variables
-$script:ModuleRoot = Split-Path -Parent $MyInvocation.MyCommand.Path
+# Import helper functions if available
+$helperPath = Join-Path -Path $script:ModuleRoot -ChildPath 'Misc\helper.psm1'
+if (Test-Path $helperPath) {
+    try {
+        Import-Module $helperPath -Force -DisableNameChecking -Verbose:$false
+        Write-Verbose "Helper module imported successfully"
+    } catch {
+        Write-Warning "Failed to import helper module: $($_.Exception.Message)"
+    }
+} else {
+    Write-Verbose "Helper module not found at: $helperPath"
+}
 
-# Import helper module for common functions
-Import-Module $script:ModuleRoot\Misc\helper.psm1 -Verbose:$false
+# PowerShell strict mode for better error detection
+Set-StrictMode -Version 'Latest'
+
+# Import required assemblies
+Add-Type -AssemblyName 'System.Web'
 
 
-# Module-level constants
-$script:ModuleConstants = @{
-    ProjectId = 25
-    DefaultLimit = 2000
-    MaxRetries = 3
-    DefaultTimeout = 30
+# Module constants with proper data types and validation
+$script:ModuleConstants = [PSCustomObject]@{
+    ProjectId = [int]25
+    DefaultLimit = [int]2000
+    MaxRetries = [int]3
+    DefaultTimeout = [int]30
+    ApiVersion = [string]'1.0'
+    UserAgent = [string]"PowerShell-RedmineDB/1.0.3"
 }
 
 # Custom field IDs mapping for better maintainability
