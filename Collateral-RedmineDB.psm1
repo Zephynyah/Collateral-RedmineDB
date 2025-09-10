@@ -1155,13 +1155,18 @@ function Search-RedmineDB {
         Search Redmine database resources by keyword and filters
     .DESCRIPTION
         Searches Redmine database resources using keywords across various fields with optional status filtering.
-        Supports searching by parent ID, type, serial number, program, hostname, and model.
+        Supports searching by parent ID, type, serial number, program, hostname, model, and MAC address.
+        Uses optimized field mappings and improved error handling.
     .PARAMETER Keyword
-        The search term to look for
+        The search term to look for. Supports regex patterns for most fields.
     .PARAMETER Field
-        The field to search in. Valid options: 'parent', 'type', 'serial', 'program', 'hostname', 'model'
+        The field to search in. Valid options: 'name', 'parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress'
     .PARAMETER Status
         Filter results by status. Valid options: 'valid', 'to verify', 'invalid', '*' (all)
+    .PARAMETER CaseSensitive
+        Perform case-sensitive search. Default is case-insensitive.
+    .PARAMETER ExactMatch
+        Perform exact match instead of partial/regex match (applies to applicable fields)
     .EXAMPLE
         Search-RedmineDB -Keyword 'SC-000059'
         # Searches by name (default field)
@@ -1175,8 +1180,11 @@ function Search-RedmineDB {
         Search-RedmineDB -Field parent -Keyword 12303 | Format-Table
         # Searches by parent ID and formats as table
     .EXAMPLE
-        Search-RedmineDB -Field type -Keyword 'Hard Drive' -Status invalid
-        # Searches by type with status filter
+        Search-RedmineDB -Field type -Keyword 'Hard Drive' -Status invalid -ExactMatch
+        # Searches by type with status filter and exact match
+    .EXAMPLE
+        Search-RedmineDB -Field serial -Keyword '^90L0A.*' -CaseSensitive
+        # Case-sensitive regex search in serial number field
     .LINK
         https://github.pw.utc.com/m335619/RedmineDB
     #>
@@ -1187,11 +1195,15 @@ function Search-RedmineDB {
         [ValidateNotNullOrEmpty()]
         [string] $Keyword,
 
-        [ValidateSet('parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress')]
+        [ValidateSet('name', 'parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress')]
         [string] $Field = 'name',
         
         [ValidateSet('valid', 'to verify', 'invalid', '*')]
-        [string] $Status = '*'
+        [string] $Status = '*',
+        
+        [switch] $CaseSensitive,
+        
+        [switch] $ExactMatch
     )
     
     begin {
@@ -1202,106 +1214,238 @@ function Search-RedmineDB {
             throw "Not connected to Redmine server. Use Connect-Redmine first."
         }
         
-        # Custom field ID mappings for search
+        # Custom field ID mappings using the centralized mapping
         $fieldMappings = @{
-            'model'      = 102
-            'serial'     = 106
-            'parent'     = 114
-            'hostname'   = 115
-            'program'    = 116
-            'mac'        = 150
-            'macaddress' = 150
+            'model'      = $script:CustomFieldIds.SystemModel
+            'serial'     = $script:CustomFieldIds.SerialNumber
+            'parent'     = $script:CustomFieldIds.ParentHardware
+            'hostname'   = $script:CustomFieldIds.HostName
+            'program'    = $script:CustomFieldIds.Programs
+            'mac'        = $script:CustomFieldIds.MACAddress
+            'macaddress' = $script:CustomFieldIds.MACAddress
         }
+        
+        # Normalize MAC address field references
+        if ($Field -eq 'macaddress') {
+            $Field = 'mac'
+        }
+        
+        # Configure comparison options
+        $comparisonType = if ($CaseSensitive) { 
+            [StringComparison]::Ordinal 
+        } else { 
+            [StringComparison]::OrdinalIgnoreCase 
+        }
+        
+        Write-LogDebug "Using field mappings: $($fieldMappings | ConvertTo-Json -Compress)"
+        Write-LogDebug "Search options - CaseSensitive: $CaseSensitive, ExactMatch: $ExactMatch"
     }
     
     process {
         try {
-            # Build filter string
-            $filter = if ($Status -ne '*') {
+            # Build status filter
+            $statusFilter = if ($Status -ne '*') {
                 "&status_id=$($script:DBStatus[$Status])"
-            }
-            else {
+            } else {
                 "&status_id=*"
             }
             
-            # Get all entries with filter
-            $collection = $Script:Redmine.DB.GetAll($filter)
+            Write-LogDebug "Applying status filter: $statusFilter"
             
+            # Retrieve all entries with status filter
+            $collection = $Script:Redmine.DB.GetAll($statusFi   |          
             if ($collection.Count -eq 0) {
-                Write-LogInfo "No entries found matching the criteria"
-                return
+                Write-LogInfo "No entries found matching the status criteria"
+                return @()
             }
             
-            Write-LogInfo "Retrieved $($collection.Count) entries, filtering by field '$Field'"
+            Write-LogInfo "Retrieved $($collection.Count) entries, applying field filter for '$Field'"
             
-            # Create search predicate based on field
+            # Create optimized search predicate factory
             $searchPredicate = switch ($Field) {
                 'model' { 
-                    { param($entry) 
-                        ($entry.CustomFields | Where-Object id -eq $fieldMappings['model']).value -match $Keyword 
+                    $fieldId = $fieldMappings['model']
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
+                        }
+                    } else {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and ($CaseSensitive ? 
+                                ($fieldValue -cmatch $Keyword) : 
+                                ($fieldValue -imatch $Keyword))
+                        }
                     }
                 }
+                
                 'serial' { 
-                    { param($entry) 
-                        ($entry.CustomFields | Where-Object id -eq $fieldMappings['serial']).value -match $Keyword 
+                    $fieldId = $fieldMappings['serial']
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
+                        }
+                    } else {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and ($CaseSensitive ? 
+                                ($fieldValue -cmatch $Keyword) : 
+                                ($fieldValue -imatch $Keyword))
+                        }
                     }
                 }
+                
                 'parent' { 
+                    $fieldId = $fieldMappings['parent']
+                    # Parent ID should always be exact match
                     { param($entry) 
-                        ($entry.CustomFields | Where-Object id -eq $fieldMappings['parent']).value -eq $Keyword 
+                        $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                        $null -ne $fieldValue -and $fieldValue -eq $Keyword
                     }
                 }
+                
                 'hostname' { 
-                    { param($entry) 
-                        ($entry.CustomFields | Where-Object id -eq $fieldMappings['hostname']).value -match $Keyword 
+                    $fieldId = $fieldMappings['hostname']
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
+                        }
+                    } else {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and ($CaseSensitive ? 
+                                ($fieldValue -cmatch $Keyword) : 
+                                ($fieldValue -imatch $Keyword))
+                        }
                     }
                 }
+                
                 'program' { 
-                    { param($entry) 
-                        ($entry.CustomFields | Where-Object id -eq $fieldMappings['program']).value -contains $Keyword 
+                    $fieldId = $fieldMappings['program']
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            if ($fieldValue -is [array]) {
+                                $fieldValue -contains $Keyword
+                            } else {
+                                $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
+                            }
+                        }
+                    } else {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            if ($fieldValue -is [array]) {
+                                $fieldValue | Where-Object { 
+                                    $CaseSensitive ? ($_ -cmatch $Keyword) : ($_ -imatch $Keyword) 
+                                }
+                            } else {
+                                $null -ne $fieldValue -and ($CaseSensitive ? 
+                                    ($fieldValue -cmatch $Keyword) : 
+                                    ($fieldValue -imatch $Keyword))
+                            }
+                        }
                     }
                 }
-                { $_ -in 'mac', 'macaddress' } { 
-                    { param($entry) 
-                        ($entry.CustomFields | Where-Object id -eq $fieldMappings[$_]).value -match $Keyword 
+                
+                'mac' { 
+                    $fieldId = $fieldMappings['mac']
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
+                        }
+                    } else {
+                        { param($entry) 
+                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $null -ne $fieldValue -and ($CaseSensitive ? 
+                                ($fieldValue -cmatch $Keyword) : 
+                                ($fieldValue -imatch $Keyword))
+                        }
                     }
                 }
+                
                 'type' { 
-                    { param($entry) 
-                        $entry.Type.name -match $Keyword 
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $null -ne $entry.Type -and $null -ne $entry.Type.name -and 
+                            $entry.Type.name.Equals($Keyword, $comparisonType)
+                        }
+                    } else {
+                        { param($entry) 
+                            $null -ne $entry.Type -and $null -ne $entry.Type.name -and 
+                            ($CaseSensitive ? 
+                                ($entry.Type.name -cmatch $Keyword) : 
+                                ($entry.Type.name -imatch $Keyword))
+                        }
                     }
                 }
-                default { 
-                    { param($entry) 
-                        $entry.Name -match $Keyword 
+                
+                'name' { 
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $null -ne $entry.Name -and $entry.Name.Equals($Keyword, $comparisonType)
+                        }
+                    } else {
+                        { param($entry) 
+                            $null -ne $entry.Name -and ($CaseSensitive ? 
+                                ($entry.Name -cmatch $Keyword) : 
+                                ($entry.Name -imatch $Keyword))
+                        }
                     }
+                }
+                
+                default { 
+                    throw "Unsupported field: $Field"
                 }
             }
             
-            # Filter entries and collect results
+            # Apply search filter with progress tracking
             $filteredResults = @{}
+            $processedCount = 0
+            $matchCount = 0
             
             foreach ($id in $collection.Keys) {
                 $entry = $collection[$id]
-                if (& $searchPredicate $entry) {
-                    $filteredResults[$id] = $entry
+                $processedCount++
+                
+                try {
+                    if (& $searchPredicate $entry) {
+                        $filteredResults[$id] = $entry
+                        $matchCount++
+                    }
+                }
+                catch {
+                    Write-LogWarn "Error processing entry ID $id`: $($_.Exception.Message)"
+                    continue
+                }
+                
+                # Progress logging for large collections
+                if ($processedCount % 100 -eq 0) {
+                    Write-LogDebug "Processed $processedCount/$($collection.Count) entries, found $matchCount matches"
                 }
             }
             
-            $resultCount = $filteredResults.Count
-            Write-LogInfo "Found $resultCount matching entries"
+            Write-LogInfo "Found $matchCount matching entries out of $processedCount processed"
             
-            if ($resultCount -eq 0) {
+            if ($matchCount -eq 0) {
                 Write-Information "No entries found matching keyword '$Keyword' in field '$Field'" -InformationAction Continue
-                return
+                return @()
             }
             
-            # Convert to PSObjects and return
-            $results = $filteredResults.Values | ForEach-Object { $_.ToPSObject() }
+            # Convert to PSObjects and return sorted results
+            Write-LogDebug "Converting $matchCount results to PSObjects"
+            $results = $filteredResults.Values | 
+                ForEach-Object { $_.ToPSObject() } | 
+                Sort-Object ID
+            
+            Write-LogInfo "Search completed successfully, returning $($results.Count) results"
             return $results
         }
         catch {
-            Write-LogError "Search operation failed: $($_.Exception.Message)"
+            Write-LogError "Search operation failed: $($_.Exception.Message)" -Exception $_.Exception
             throw
         }
     }
