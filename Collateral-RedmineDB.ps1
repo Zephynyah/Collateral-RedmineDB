@@ -6,7 +6,17 @@ try {
 
     Connect-Redmine -Server "http://localhost:8080" -Key $key
     
-    # Get-LogConfiguration 
+    # New state hashtable usage
+    $states = Get-SettingsData -DataName "DBvalidState"
+    $states['CA']  # Returns "California"
+
+    # Direct variable access
+    $DBvalidState['CA']  # "Massachusetts" -> "California"
+
+    # Check if state exists
+    if ($DBvalidState.ContainsKey('TX')) {
+        Write-Host "Texas: $($DBvalidState['TX'])"
+    }
 }
 catch {
     <#Do this if a terminating exception happens#>
@@ -14,6 +24,6 @@ catch {
 }
 finally {
     <#Do this after the try block regardless of whether an exception occurred or not#>
-    Remove-Module Collateral-RedmineDB -Force -ErrorAction SilentlyContinue
+    # Remove-Module Collateral-RedmineDB -Force -ErrorAction SilentlyContinue
 }
 

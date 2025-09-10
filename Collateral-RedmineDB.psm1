@@ -596,7 +596,7 @@ class ValidatorBase {
 }
 
 class ValidateState : ValidatorBase {
-    static [array] $ValidStates = $script:DBvalidState
+    static [array] $ValidStates = $script:DBvalidState.Keys
 
     ValidateState([string] $Value) : base($Value) {}
     
