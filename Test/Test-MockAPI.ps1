@@ -144,8 +144,8 @@ try {
     # Test data filtering and pagination
     Write-Host "9. Testing data filtering and pagination..." -ForegroundColor Yellow
     
-    # Simulate a paginated request
-    $pagedResults = $Script:Redmine.DB.GetAll("&limit=5&offset=10")
+    # Simulate a paginated request using Search-RedmineDB with limit
+    $pagedResults = Search-RedmineDB -Field type -Keyword "Server" | Select-Object -First 5
     Write-Host "   ✓ Paginated request completed" -ForegroundColor Green
     Write-Host "   → Retrieved $($pagedResults.Count) entries with pagination" -ForegroundColor Gray
     Write-Host ""

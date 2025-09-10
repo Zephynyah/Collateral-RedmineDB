@@ -4,7 +4,7 @@
 # Data source configuration
 $MockAPIConfig = @{
     # Path to the JSON data file (relative to module root)
-    DataPath = "Data\db-small.json"
+    DataPath = "Data\db.json"
     
     # Mock server settings
     MockServerUrl = "http://localhost:8080"

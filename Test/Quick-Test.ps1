@@ -8,6 +8,10 @@ if ($EnableDebug) {
     $DebugPreference = 'Continue'
 }
 
+
+Clear-Host
+
+
 Write-Host "=== Mock API Integration Test ===" -ForegroundColor Cyan
 
 try {
