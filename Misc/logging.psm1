@@ -428,14 +428,6 @@ class Logger {
         }
     }
 
-    [void] SetLogSource([string]$source) {
-        $this.Source = $source
-    }
-
-    [string] GetLogSource() {
-        return $this.Source
-    }
-
     # Cleanup resources
     [void] Dispose() {
         if ($this.FileWriter) {
@@ -479,7 +471,7 @@ function Initialize-Logger {
 
     $script:GlobalLogger = [Logger]::new($Source, $config)
     
-    Write-Verbose "Logger initialized with level: $MinimumLevel, targets: $Targets"
+    Write-Host "Logger initialized with level: $MinimumLevel, targets: $Targets" -ForegroundColor Green
 }
 
 # Get global logger instance
@@ -613,7 +605,7 @@ function Set-LogLevel {
     
     $logger = Get-Logger
     $logger.SetLogLevel($Level)
-    Write-Verbose "Log level set to: $Level"
+    Write-Host "Log level set to: $Level" -ForegroundColor Green
 }
 
 function Set-LogTargets {
@@ -625,27 +617,7 @@ function Set-LogTargets {
     
     $logger = Get-Logger
     $logger.SetLogTargets($Targets)
-    Write-Verbose "Log targets set to: $Targets"
-}
-
-function Set-LogSource {
-    [CmdletBinding()]
-    param(
-        [Parameter(Mandatory = $true)]
-        [string]$Source
-    )
-
-    $logger = Get-Logger
-    $logger.SetLogSource($Source)
-    Write-Verbose "Log source set to: $Source"
-}
-
-function Get-LogSource {
-    [CmdletBinding()]
-    param()
-
-    $logger = Get-Logger
-    return $logger.GetLogSource()
+    Write-Host "Log targets set to: $Targets" -ForegroundColor Green
 }
 
 function Get-LogConfiguration {
@@ -704,7 +676,7 @@ function Enable-FileLogging {
     $currentTargets = $logger.GetLogTargets()
     $newTargets = $currentTargets -bor [LogTarget]::File
     $logger.SetLogTargets($newTargets)
-    Write-Verbose "File logging enabled. Log file: $($logger.GetLogFilePath())"
+    Write-Host "File logging enabled. Log file: $($logger.GetLogFilePath())" -ForegroundColor Green
 }
 
 function Disable-FileLogging {
@@ -715,7 +687,7 @@ function Disable-FileLogging {
     $currentTargets = $logger.GetLogTargets()
     $newTargets = $currentTargets -band (-bnot [LogTarget]::File)
     $logger.SetLogTargets($newTargets)
-    Write-Verbose "File logging disabled"
+    Write-Host "File logging disabled" -ForegroundColor Green
 }
 
 function Enable-ConsoleLogging {
@@ -726,7 +698,7 @@ function Enable-ConsoleLogging {
     $currentTargets = $logger.GetLogTargets()
     $newTargets = $currentTargets -bor [LogTarget]::Console
     $logger.SetLogTargets($newTargets)
-    Write-Verbose "Console logging enabled"
+    Write-Host "Console logging enabled" -ForegroundColor Green
 }
 
 function Disable-ConsoleLogging {
@@ -737,7 +709,7 @@ function Disable-ConsoleLogging {
     $currentTargets = $logger.GetLogTargets()
     $newTargets = $currentTargets -band (-bnot [LogTarget]::Console)
     $logger.SetLogTargets($newTargets)
-    Write-Verbose "Console logging disabled"
+    Write-Host "Console logging disabled" -ForegroundColor Green
 }
 
 function Set-LogFile {
@@ -749,7 +721,7 @@ function Set-LogFile {
     
     $logger = Get-Logger
     $logger.SetLogFilePath($Path)
-    Write-Verbose "Log file path set to: $Path"
+    Write-Host "Log file path set to: $Path" -ForegroundColor Green
 }
 
 # Export public functions
@@ -764,8 +736,6 @@ Export-ModuleMember -Function @(
     'Write-LogCritical',
     'Set-LogLevel',
     'Set-LogTargets',
-    'Set-LogSource',
-    'Get-LogSource',
     'Get-LogConfiguration',
     'Get-LogLevels',
     'Get-LogTargets',

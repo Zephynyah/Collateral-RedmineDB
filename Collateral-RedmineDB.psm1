@@ -38,7 +38,7 @@ catch {
 
 try {
     Import-Module .\Misc\logging.psm1 -Force -ErrorAction Stop
-    Initialize-Logger -Source "Collateral-RedmineDB" -MinimumLevel Information -Targets Console
+    Initialize-Logger -Source "RedmineDB" -MinimumLevel Information -Targets Console
 
     Import-Module .\Misc\helper.psm1 -Force -ErrorAction Stop
     Write-LogInfo "Helper module imported successfully"
@@ -793,7 +793,7 @@ function Connect-Redmine {
     )
     
     begin {
-        Write-LogInfo "Initializing connection to Redmine server: $Server"
+        Write-LogInfo "Initializing connection to Redmine server: $Server" -Source "RedmineDB"
 
         try {
             $uri = [System.Uri]::new($Server)
