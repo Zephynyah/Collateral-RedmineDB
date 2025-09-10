@@ -1,0 +1,11 @@
+<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
+  <S>Inventory</S>
+  <S>Inventory - Reuse</S>
+  <S>Allocated</S>
+  <S>Operational</S>
+  <S>Disposed</S>
+  <S>Waiting for Destruction</S>
+  <S>Destroyed</S>
+  <S>Repair</S>
+  <S>Quarantined</S>
+</Objs>

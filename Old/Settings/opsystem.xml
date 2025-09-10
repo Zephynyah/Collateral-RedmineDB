@@ -1,0 +1,29 @@
+﻿<Objs Version="1.1.0.1" xmlns="http://schemas.microsoft.com/powershell/2004/04">
+  <S>Windows 7</S>
+  <S>Windows 10 Enterprise</S>
+  <S>Windows 10 Pro</S>
+  <S>Windows 10</S>
+  <S>Windows 11 Enterprise</S>
+  <S>Windows Server 2012R2</S>
+  <S>Windows Server 2016 Standard</S>
+  <S>Windows Server 2019</S>
+  <S>Unisphere</S>
+  <S>Red Hat Enterprise Linux 7</S>
+  <S>Redhat 8</S>
+  <S>CentOS</S>
+  <S>PAN-OS 11</S>
+  <S>OneFS</S>
+  <S>MLNX-OS 3.7.1000</S>
+  <S>FabricOS 8.2</S>
+  <S>Cisco IOS</S>
+  <S>Cisco IOS 15.2(4r)E3</S>
+  <S>Cisco IOS 15.2(4)E6</S>
+  <S>DellEMC O/S 2.0</S>
+  <S>Debian 9</S>
+  <S>Debian 10</S>
+  <S>ESXi</S>
+  <S>EMC Unity OE</S>
+  <S>AIX 7.0</S>
+  <S>N/A</S>
+  <S></S>
+</Objs>
