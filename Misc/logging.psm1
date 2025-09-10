@@ -640,6 +640,14 @@ function Set-LogSource {
     Write-Verbose "Log source set to: $Source"
 }
 
+function Get-LogSource {
+    [CmdletBinding()]
+    param()
+
+    $logger = Get-Logger
+    return $logger.GetLogSource()
+}
+
 function Get-LogConfiguration {
     [CmdletBinding()]
     param()
@@ -757,6 +765,7 @@ Export-ModuleMember -Function @(
     'Set-LogLevel',
     'Set-LogTargets',
     'Set-LogSource',
+    'Get-LogSource',
     'Get-LogConfiguration',
     'Get-LogLevels',
     'Get-LogTargets',
