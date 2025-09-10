@@ -1180,11 +1180,11 @@ function Send-HTTPRequest {
         
         [Parameter(Mandatory = $false)]
         [ValidateRange(1, 300)]
-        [int]$TimeoutSec = $script:ModuleConstants.DefaultTimeout,
+        [int]$TimeoutSec = 30,
         
         [Parameter(Mandatory = $false)]
         [ValidateRange(0, 10)]
-        [int]$MaxRetries = $script:ModuleConstants.MaxRetries,
+        [int]$MaxRetries = 3,
         
         [Parameter(Mandatory = $false)]
         [ValidateRange(1, 60)]
@@ -1317,6 +1317,93 @@ function Send-HTTPRequest {
 }
 #endregion
 
+#region API Key Retrieval Function
+function Get-ApiKey {
+    <#
+    .SYNOPSIS
+        Retrieves an API key from the authentication service
+    .DESCRIPTION
+        Sends a POST request to the authentication service to obtain an API key using client credentials
+    .PARAMETER ClientId
+        The client ID for authentication
+    .PARAMETER ClientSecret
+        The client secret for authentication
+    .PARAMETER Server
+        The server URL (defaults to http://localhost:3000)
+    .EXAMPLE
+        Get-ApiKey
+        # Uses default demo client credentials
+    .EXAMPLE
+        Get-ApiKey -ClientId "my-client" -ClientSecret "my-secret"
+        # Retrieves API key with custom credentials
+    .EXAMPLE
+        Get-ApiKey -Server "https://api.example.com"
+        # Retrieves API key from custom server
+    #>
+    [CmdletBinding()]
+    param(
+        [Parameter(Mandatory = $false)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ClientId = "demo-client",
+        
+        [Parameter(Mandatory = $false)]
+        [ValidateNotNullOrEmpty()]
+        [string]$ClientSecret = "demo-secret-123",
+
+        [Parameter()]
+        [ValidateNotNullOrEmpty()]
+        [string]$Server = "http://localhost:3000"
+    )
+    
+    begin {
+        Write-LogInfo "Requesting API key for client: $ClientId"
+    }
+    
+    process {
+        try {
+            # Prepare request parameters
+            $uri = "$($Server.TrimEnd('/'))/api/auth/apikey"
+            $headers = @{
+                'Content-Type' = 'application/json'
+                'Accept' = 'application/json'
+            }
+            
+            $body = @{
+                clientId = $ClientId
+                clientSecret = $ClientSecret
+            } | ConvertTo-Json
+            
+            # Send POST request
+            $requestParams = @{
+                Uri = $uri
+                Method = 'POST'
+                Headers = $headers
+                Body = $body
+                TimeoutSec = 30
+            }
+            
+            Write-LogDebug "Sending request to: $uri"
+            $response = Invoke-RestMethod @requestParams
+            
+            if ($response.apikey) {
+                Write-LogInfo "Successfully retrieved API key"
+                return $response.apikey
+            } else {
+                throw "No API key returned in response"
+            }
+        }
+        catch {
+            Write-LogError "Failed to retrieve API key: $($_.Exception.Message)" -Exception $_.Exception
+            throw
+        }
+        finally {
+            # Clear client secret from memory (skip validation)
+            Remove-Variable -Name ClientSecret -ErrorAction SilentlyContinue
+        }
+    }
+}
+#endregion
+
 # Export functions
 Export-ModuleMember -Function @(
     'Import-ExcelData',
@@ -1326,5 +1413,6 @@ Export-ModuleMember -Function @(
     'Compare-CsvData',
     'ConvertTo-Excel',
     'Test-CsvData',
-    'Send-HTTPRequest'
+    'Send-HTTPRequest',
+    'Get-ApiKey'
 )

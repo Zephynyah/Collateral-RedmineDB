@@ -2,9 +2,14 @@ try {
 
     Import-Module .\Collateral-RedmineDB.psm1 -Force
 
-    $key = "c5fc2de08e46b51bbd8c0a448c0b08f35e99004d"
+    $key = Get-ApiKey -Server 'http://localhost:3000'
 
-    Connect-Redmine -Server "http://localhost:8080" -Key $key
+    $key
+
+    exit
+
+    # Connect-Redmine -Server "http://localhost:8080" -Key $key
+    Connect-Redmine -Server "http://localhost:3000" -Key $key
     
     # New state hashtable usage
     $states = Get-SettingsData -DataName "DBvalidState"

@@ -1970,7 +1970,7 @@ function Invoke-DecomissionDB {
 }
 #endregion
 
-Export-ModuleMember -Cmdlet * -Alias * -Function * -Variable *
+Export-ModuleMember -Cmdlet * -Alias * -Function * -Variable @('ModuleConstants', 'CustomFieldIds')
 
 # Module cleanup when removed
 $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {

@@ -113,7 +113,8 @@
 		'Disable-FileLogging',
 		'Enable-ConsoleLogging',
 		'Disable-ConsoleLogging',
-		'Set-LogFile'
+		'Set-LogFile',
+        'Get-ApiKey'
 	)
 	
 	# Cmdlets to export from this module
