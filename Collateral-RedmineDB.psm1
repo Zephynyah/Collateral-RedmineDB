@@ -7,7 +7,7 @@
 	 Organization:      House of Powershell
 	 Filename:          Collateral-RedmineDB.psm1
 	 Description:       PowerShell module for Redmine database API operations
-	 Version:           1.0.1
+	 Version:           1.0.3
 	 Last Modified:     2025-06-26
 	-------------------------------------------------------------------------
 	 Copyright (c) 2024 Jason Hickey. All rights reserved.
@@ -61,7 +61,6 @@ $script:ModuleConstants = [PSCustomObject]@{
     DefaultTimeout = [int]30
     ApiVersion     = [string]'1.0'
     UserAgent      = [string]"PowerShell-RedmineDB/1.0.3"
-    ApiEndpoint    = [string]'/api'
 }
 
 # Custom field IDs mapping for better maintainability
@@ -783,12 +782,34 @@ function ConvertTo-RedmineCustomField {
     <#
     .SYNOPSIS
         Converts custom field data to Redmine API format.
+    
     .DESCRIPTION
         Helper function to properly format custom fields for Redmine API requests.
+        Takes a hashtable of custom field data and converts it to the format expected by the Redmine REST API.
+    
+    .PARAMETER CustomFields
+        A hashtable containing custom field data where keys are field IDs and values are the field values.
+    
+    .EXAMPLE
+        $customFields = @{
+            101 = "Dell"
+            102 = "Latitude 7420"
+            105 = "Windows 11"
+        }
+        $formatted = ConvertTo-RedmineCustomField -CustomFields $customFields
+        # Returns formatted custom fields array for API submission
+    
+    .OUTPUTS
+        System.Array
+        Returns an array of hashtables formatted for Redmine API consumption.
+    
+    .NOTES
+        This function is primarily used internally by other module functions when preparing data for API requests.
     #>
     [CmdletBinding()]
     param(
-        [Parameter(Mandatory = $true)]
+        [Parameter(Mandatory = $true, Position = 0, ValueFromPipeline = $true)]
+        [ValidateNotNull()]
         [hashtable]$CustomFields
     )
     
@@ -827,7 +848,7 @@ function Connect-Redmine {
         Connect-Redmine -Server "https://sctdesk.eh.pweh.com" -Username "user123"
         # Prompts for password for the specified user
     .LINK
-        https://github.pw.utc.com/m335619/RedmineDB
+        https://github.pw.utc.com/m335619/Collateral-RedmineDB
     .NOTES
         For security reasons, it's recommended to use API key authentication or prompt for passwords
         rather than passing them as plain text parameters.
@@ -968,13 +989,38 @@ function Connect-Redmine {
 function Disconnect-Redmine {
     <#
     .SYNOPSIS
-        Disconnects from the Redmine server
+        Disconnects from the Redmine server and cleans up session variables.
+    
     .DESCRIPTION
-        Properly disconnects from the Redmine server and cleans up the session variables.
+        Properly disconnects from the Redmine server by signing out of active sessions
+        and removing all connection-related script variables. This function ensures
+        clean termination of the Redmine connection and prevents resource leaks.
+    
     .EXAMPLE
         Disconnect-Redmine
+        # Disconnects from the current Redmine server and cleans up all session data
+    
+    .EXAMPLE
+        # Use in a try/finally block to ensure cleanup
+        try {
+            Connect-Redmine -Server "https://redmine.example.com" -Key $apiKey
+            # ... perform operations ...
+        }
+        finally {
+            Disconnect-Redmine
+        }
+    
+    .OUTPUTS
+        None
+        This function does not return any output but displays status messages.
+    
+    .NOTES
+        This function should be called when finished working with the Redmine API
+        to ensure proper cleanup of authentication tokens and session data.
+        It is safe to call this function multiple times or when no connection exists.
+    
     .LINK
-        https://github.pw.utc.com/m335619/RedmineDB
+        Connect-Redmine
     #>
     [CmdletBinding()]
     param()
@@ -1011,68 +1057,117 @@ function Disconnect-Redmine {
 function Invoke-ValidateDB {
     <#
     .SYNOPSIS
-        Validates and translates Redmine DB parameters
+        Validates and translates Redmine DB parameters for asset management operations.
+    
     .DESCRIPTION
         Validates Redmine DB selection parameters against expected values and translates
-        parameter aliases to their canonical names.
+        parameter aliases to their canonical names. This function ensures data integrity
+        by validating all input parameters against predefined lists and formats before
+        submitting to the Redmine API.
+    
     .PARAMETER Name
-        The name/asset tag for the database entry
+        The name/asset tag for the database entry. This is typically a unique identifier for the asset.
+    
     .PARAMETER Id
-        The unique identifier for the database entry
+        The unique identifier for the database entry in Redmine.
+    
     .PARAMETER Type
-        The type/category of the asset
+        The type/category of the asset (e.g., 'Workstation', 'Server', 'VoIP'). Default is 'Workstation'.
+    
     .PARAMETER Status
-        The operational status of the asset
+        The operational status of the asset. Valid values: 'valid', 'invalid', 'to verify', or numeric equivalents (0, 1, 2).
+    
     .PARAMETER Private
-        Whether the entry should be marked as private
+        Whether the entry should be marked as private. Accepts boolean values or string representations.
+    
     .PARAMETER Description
-        Description of the asset
+        Description of the asset providing additional details about its purpose or configuration.
+    
     .PARAMETER Tags
-        Tags to associate with the asset
+        Tags to associate with the asset for categorization and searching purposes.
+    
     .PARAMETER SystemMake
-        The manufacturer of the system
+        The manufacturer of the system (e.g., 'Dell', 'HP', 'Lenovo').
+    
     .PARAMETER SystemModel
-        The model of the system
+        The model of the system (e.g., 'Latitude 7420', 'ThinkPad X1').
+    
     .PARAMETER AssetTag
-        The asset tag identifier
+        The asset tag identifier used for inventory tracking.
+    
     .PARAMETER OperatingSystem
-        The operating system installed on the asset
+        The operating system installed on the asset. Must be validated against the approved OS list.
+    
     .PARAMETER SerialNumber
-        The serial number of the asset
+        The serial number of the asset as provided by the manufacturer.
+    
     .PARAMETER ParentHardware
-        The parent hardware identifier
+        The parent hardware identifier for assets that are components of larger systems.
+    
     .PARAMETER HostName
-        The network hostname
+        The network hostname assigned to the asset.
+    
     .PARAMETER HardwareLifecycle
-        The hardware lifecycle stage
+        The hardware lifecycle stage (e.g., 'New', 'Production', 'End of Life').
+    
     .PARAMETER Program
-        The associated program(s)
+        The associated program(s) that the asset supports.
+    
     .PARAMETER GSCStatus
-        The Government Security Classification status
+        The Government Security Classification status for compliance tracking.
+    
     .PARAMETER MACAddress
-        The MAC address (for VoIP devices)
+        The MAC address for network-enabled devices, particularly VoIP equipment.
+    
     .PARAMETER Memory
-        The system memory specification
+        The system memory specification (e.g., '8 GB', '16 GB'). Must include size and unit.
+    
     .PARAMETER HardDriveSize
-        The storage capacity
+        The storage capacity (e.g., '500 GB', '1 TB'). Must include size and unit.
+    
     .PARAMETER MemoryVolatility
-        The memory volatility classification
+        The memory volatility classification. Valid values: 'Volatile', 'Non-Volatile', 'N/A'.
+    
     .PARAMETER State
-        The physical location state
+        The physical location state using standard state abbreviations. Default is 'CT'.
+    
     .PARAMETER Building
-        The building identifier
+        The building identifier where the asset is located.
+    
     .PARAMETER Room
-        The room identifier
+        The room identifier within the building where the asset is located.
+    
     .PARAMETER RackSeat
-        The rack or seat designation
+        The rack or seat designation for data center equipment.
+    
     .PARAMETER SafeAndDrawerNumber
-        The safe and drawer number
+        The safe and drawer number for secure storage locations.
+    
+    .PARAMETER RefreshDate
+        The date when the asset was last refreshed or updated.
+    
+    .PARAMETER RefreshCost
+        The cost associated with the last refresh or update.
+    
+    .PARAMETER BrassTag
+        The brass tag identifier for special asset tracking.
+    
+    .PARAMETER KeyExpiration
+        The expiration date for security keys or certificates.
+    
+    .PARAMETER FirmwareVersion
+        The firmware version installed on the asset.
+    
     .PARAMETER Notes
-        Additional notes
+        Additional notes or comments about the asset.
+    
     .PARAMETER Issues
-        Associated issues
+        Associated issues or tickets related to the asset.
+    
     .EXAMPLE
-        $params = Invoke-ValidateDB -Building 'NB - S Building' -Name 'test'
+        $params = Invoke-ValidateDB -Building 'NB - S Building' -Name 'SC-123456'
+        # Validates basic asset parameters
+    
     .EXAMPLE
         $validParams = @{
             Type = 'VoIP'
@@ -1086,8 +1181,37 @@ function Invoke-ValidateDB {
             Room = 'EOB - Marlin'
         }
         $editParams = Invoke-ValidateDB @validParams
+        # Validates a comprehensive set of parameters for a VoIP device
+    
+    .EXAMPLE
+        $workstationParams = @{
+            Name = 'WS-001234'
+            Type = 'Workstation'
+            SystemMake = 'Dell'
+            SystemModel = 'Latitude 7420'
+            OperatingSystem = 'Windows 11'
+            Memory = '16 GB'
+            HardDriveSize = '512 GB'
+            State = 'CT'
+            Building = 'Main Building'
+            Room = 'Room 101'
+        }
+        $validated = Invoke-ValidateDB @workstationParams
+        # Validates parameters for a workstation asset
+    
+    .OUTPUTS
+        System.Collections.Hashtable
+        Returns a hashtable of validated and normalized parameters ready for API submission.
+    
+    .NOTES
+        This function performs extensive validation against predefined lists and formats.
+        Invalid values will result in descriptive error messages indicating valid options.
+        Parameter aliases are automatically converted to their canonical names.
+    
     .LINK
-        https://github.pw.utc.com/m335619/RedmineDB
+        Connect-Redmine
+        New-RedmineDB
+        Edit-RedmineDB
     #>
     [CmdletBinding()]
     [OutputType([hashtable])]
@@ -1242,7 +1366,7 @@ function Search-RedmineDB {
     .PARAMETER Keyword
         The search term to look for. Supports regex patterns for most fields.
     .PARAMETER Field
-        The field to search in. Valid options: 'name', 'parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress'
+        The field to search in. Valid options: 'name', 'parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress'
     .PARAMETER Status
         Filter results by status. Valid options: 'valid', 'to verify', 'invalid', '*' (all)
     .PARAMETER CaseSensitive
@@ -1268,7 +1392,7 @@ function Search-RedmineDB {
         Search-RedmineDB -Field serial -Keyword '^90L0A.*' -CaseSensitive
         # Case-sensitive regex search in serial number field
     .LINK
-        https://github.pw.utc.com/m335619/RedmineDB
+        https://github.pw.utc.com/m335619/Collateral-RedmineDB
     #>
     [CmdletBinding()]
     [OutputType([PSCustomObject[]])]
@@ -1277,7 +1401,7 @@ function Search-RedmineDB {
         [ValidateNotNullOrEmpty()]
         [string] $Keyword,
 
-        [ValidateSet('name', 'parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress')]
+        [ValidateSet('name', 'parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress')]
         [string] $Field = 'name',
         
         [ValidateSet('valid', 'to verify', 'invalid', '*')]
@@ -1298,13 +1422,13 @@ function Search-RedmineDB {
         
         # Custom field ID mappings using the centralized mapping
         $fieldMappings = @{
-            'model'      = $script:CustomFieldIds.SystemModel
-            'serial'     = $script:CustomFieldIds.SerialNumber
-            'parent'     = $script:CustomFieldIds.ParentHardware
-            'hostname'   = $script:CustomFieldIds.HostName
-            'program'    = $script:CustomFieldIds.Programs
-            'mac'        = $script:CustomFieldIds.MACAddress
-            'macaddress' = $script:CustomFieldIds.MACAddress
+            'model'        = $script:CustomFieldIds.SystemModel
+            'serialnumber' = $script:CustomFieldIds.SerialNumber
+            'parent'       = $script:CustomFieldIds.ParentHardware
+            'hostname'     = $script:CustomFieldIds.HostName
+            'program'      = $script:CustomFieldIds.Programs
+            'mac'          = $script:CustomFieldIds.MACAddress
+            'macaddress'   = $script:CustomFieldIds.MACAddress
         }
         
         # Normalize MAC address field references
@@ -1348,6 +1472,7 @@ function Search-RedmineDB {
             # Create optimized search predicate factory
             $searchPredicate = switch ($Field) {
                 'model' { 
+                    Write-LogDebug "Searching by model with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
                     $fieldId = $fieldMappings['model']
                     if ($ExactMatch) {
                         { param($entry) 
@@ -1368,9 +1493,10 @@ function Search-RedmineDB {
                         }
                     }
                 }
-                
-                'serial' { 
-                    $fieldId = $fieldMappings['serial']
+
+                'serialnumber' {
+                    Write-LogDebug "Searching by serial number with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
+                    $fieldId = $fieldMappings['serialnumber']
                     if ($ExactMatch) {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
@@ -1392,6 +1518,7 @@ function Search-RedmineDB {
                 }
                 
                 'parent' { 
+                    Write-LogDebug "Searching by parent ID (exact match only)"
                     $fieldId = $fieldMappings['parent']
                     # Parent ID should always be exact match
                     { param($entry) 
@@ -1401,6 +1528,7 @@ function Search-RedmineDB {
                 }
                 
                 'hostname' { 
+                    Write-LogDebug "Searching by hostname with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
                     $fieldId = $fieldMappings['hostname']
                     if ($ExactMatch) {
                         { param($entry) 
@@ -1423,6 +1551,7 @@ function Search-RedmineDB {
                 }
                 
                 'program' { 
+                    Write-LogDebug "Searching by program with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
                     $fieldId = $fieldMappings['program']
                     if ($ExactMatch) {
                         { param($entry) 
@@ -1462,6 +1591,7 @@ function Search-RedmineDB {
                 }
                 
                 'mac' { 
+                    Write-LogDebug "Searching by MAC address with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
                     $fieldId = $fieldMappings['mac']
                     if ($ExactMatch) {
                         { param($entry) 
@@ -1484,6 +1614,7 @@ function Search-RedmineDB {
                 }
                 
                 'type' { 
+                    Write-LogDebug "Searching by type with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
                     if ($ExactMatch) {
                         { param($entry) 
                             $null -ne $entry.Type -and $null -ne $entry.Type.name -and 
@@ -1504,6 +1635,7 @@ function Search-RedmineDB {
                 }
                 
                 'name' { 
+                    Write-LogDebug "Searching by name with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
                     if ($ExactMatch) {
                         { param($entry) 
                             $null -ne $entry.Name -and $entry.Name.Equals($Keyword, $comparisonType)
@@ -1577,6 +1709,139 @@ function Search-RedmineDB {
 }
 
 function Set-RedmineDB {
+    <#
+    .SYNOPSIS
+        Creates a new Redmine database resource object with specified parameters.
+    
+    .DESCRIPTION
+        Constructs a new Redmine database resource object and populates it with the provided
+        parameters. This function maps parameter values to the appropriate Redmine custom fields
+        and prepares the object for API submission.
+    
+    .PARAMETER id
+        The unique identifier for the database entry.
+    
+    .PARAMETER name
+        The name or asset tag for the database entry.
+    
+    .PARAMETER type
+        The type/category of the asset (e.g., 'Workstation', 'Server', 'VoIP').
+    
+    .PARAMETER status
+        The operational status of the asset ('valid', 'invalid', 'to verify').
+    
+    .PARAMETER private
+        Whether the entry should be marked as private (accepts various boolean representations).
+    
+    .PARAMETER description
+        Description of the asset providing additional details.
+    
+    .PARAMETER tags
+        Array of tags to associate with the asset for categorization.
+    
+    .PARAMETER systemMake
+        The manufacturer of the system (mapped to custom field 101).
+    
+    .PARAMETER systemModel
+        The model of the system (mapped to custom field 102).
+    
+    .PARAMETER operatingSystem
+        The operating system installed on the asset (mapped to custom field 105).
+    
+    .PARAMETER serialNumber
+        The serial number of the asset (mapped to custom field 106).
+    
+    .PARAMETER assetTag
+        The asset tag identifier (mapped to custom field 107).
+    
+    .PARAMETER periodsProcessing
+        The periods processing information (mapped to custom field 113).
+    
+    .PARAMETER parentHardware
+        The parent hardware identifier (mapped to custom field 114).
+    
+    .PARAMETER hostname
+        The network hostname (mapped to custom field 115).
+    
+    .PARAMETER hardwareLifecycle
+        The hardware lifecycle stage (mapped to custom field 190).
+    
+    .PARAMETER programs
+        Array of associated programs (mapped to custom field 116).
+    
+    .PARAMETER gscStatus
+        The Government Security Classification status (mapped to custom field 117).
+    
+    .PARAMETER hardDriveSize
+        The storage capacity (mapped to custom field 120).
+    
+    .PARAMETER memory
+        The system memory specification (mapped to custom field 119).
+    
+    .PARAMETER memoryVolatility
+        The memory volatility classification (mapped to custom field 124).
+    
+    .PARAMETER state
+        The physical location state (mapped to custom field 109).
+    
+    .PARAMETER building
+        The building identifier (mapped to custom field 126).
+    
+    .PARAMETER room
+        The room identifier (mapped to custom field 127).
+    
+    .PARAMETER rackSeat
+        The rack or seat designation.
+    
+    .PARAMETER node
+        The node identifier for network topology.
+    
+    .PARAMETER safeAndDrawerNumber
+        The safe and drawer number for secure storage.
+    
+    .PARAMETER refreshDate
+        The date when the asset was last refreshed.
+    
+    .PARAMETER macAddress
+        The MAC address for network-enabled devices.
+    
+    .PARAMETER notes
+        Additional notes or comments about the asset.
+    
+    .PARAMETER issues
+        Array of associated issues or tickets.
+    
+    .EXAMPLE
+        $dbResource = Set-RedmineDB -name "WS-001234" -type "Workstation" -systemMake "Dell" -systemModel "Latitude 7420"
+        # Creates a basic workstation resource object
+    
+    .EXAMPLE
+        $serverParams = @{
+            name = "SRV-001"
+            type = "Server"
+            systemMake = "HPE"
+            systemModel = "ProLiant DL380"
+            memory = "64 GB"
+            hardDriveSize = "2 TB"
+            operatingSystem = "Windows Server 2022"
+        }
+        $dbResource = Set-RedmineDB @serverParams
+        # Creates a server resource object with multiple parameters
+    
+    .OUTPUTS
+        PSCustomObject
+        Returns a configured Redmine database resource object ready for API operations.
+    
+    .NOTES
+        This function is primarily used internally by other module functions.
+        The returned object contains the properly formatted data structure for Redmine API submission.
+        Custom field mappings are handled automatically based on predefined field IDs.
+    
+    .LINK
+        New-RedmineDB
+        Edit-RedmineDB
+        Invoke-ValidateDB
+    #>
     Param (
         [String]$id,
         [String]$name,
@@ -1657,41 +1922,150 @@ function Set-RedmineDB {
 
 function New-RedmineDB {
     <#
-   .SYNOPSIS
-    Create a new Redmine resource
-   .DESCRIPTION
-    Create a new Redmine resource
-   .EXAMPLE
-	New-RedmineDB -name "SC-005027" -type "Hard Drive" -SystemMake "TOSHIBA" -SystemModel "P5R3T84A EMC3840" `
-              -SerialNumber  "90L0A0RJTT1F" -ParentHardware "12303" -Program  "AETP", "Underground" `
-			  -GSCStatus "Approved" -HardDriveSize "3.8 TB" -State  "CT" -Building  "CT - C Building" `
-			  -Room  "C - Data Center"
-   .EXAMPLE
-	$newParams = @{
-		name                = "SC-005027"
-		description         = ""
-		status              = "valid"
-		type                = "Hard Drive"
-		SystemMake          = "TOSHIBA"
-		SystemModel         = "P5R3T84A EMC3840"
-		SerialNumber        = "90L0A0RJTT1F"
-		ParentHardware      = "12303"
-		HostName            = ""
-		Program             = "AETP", "Underground"
-		GSCStatus           = "Approved"
-		HardDriveSize       = "3.8 TB"
-		MemoryVolatility    = ""
-		State               = "CT"
-		Building            = "CT - C Building"
-		Room                = "C - Data Center"
-		RackSeat            = ""
-		SafeandDrawerNumber = ""
-	}
-
-	New-RedmineDB @newParams
-   .LINK
-    https://github.pw.utc.com/m335619/RedmineDB
-	#>
+    .SYNOPSIS
+        Creates a new Redmine database resource entry.
+    
+    .DESCRIPTION
+        Creates a new asset entry in the Redmine database with the specified parameters.
+        This function validates the input parameters, creates the appropriate resource object,
+        and submits it to the Redmine API for creation.
+    
+    .PARAMETER name
+        The name or asset tag for the new database entry. This should be unique.
+    
+    .PARAMETER type
+        The type/category of the asset (e.g., 'Workstation', 'Server', 'Hard Drive', 'VoIP').
+    
+    .PARAMETER status
+        The operational status of the asset ('valid', 'invalid', 'to verify').
+    
+    .PARAMETER private
+        Whether the entry should be marked as private (boolean).
+    
+    .PARAMETER description
+        Description of the asset providing additional details about its purpose or configuration.
+    
+    .PARAMETER tags
+        Array of tags to associate with the asset for categorization and searching.
+    
+    .PARAMETER systemMake
+        The manufacturer of the system (e.g., 'Dell', 'HP', 'TOSHIBA').
+    
+    .PARAMETER systemModel
+        The model of the system (e.g., 'Latitude 7420', 'P5R3T84A EMC3840').
+    
+    .PARAMETER operatingSystem
+        The operating system installed on the asset.
+    
+    .PARAMETER serialNumber
+        The serial number of the asset as provided by the manufacturer.
+    
+    .PARAMETER assetTag
+        The asset tag identifier used for inventory tracking.
+    
+    .PARAMETER periodsProcessing
+        The periods processing information for the asset.
+    
+    .PARAMETER parentHardware
+        The parent hardware identifier for assets that are components of larger systems.
+    
+    .PARAMETER hostname
+        The network hostname assigned to the asset.
+    
+    .PARAMETER hardwareLifecycle
+        The hardware lifecycle stage (e.g., 'New', 'Production', 'End of Life').
+    
+    .PARAMETER programs
+        Array of associated programs that the asset supports.
+    
+    .PARAMETER gscStatus
+        The Government Security Classification status for compliance tracking.
+    
+    .PARAMETER hardDriveSize
+        The storage capacity (e.g., '3.8 TB', '500 GB'). Must include size and unit.
+    
+    .PARAMETER memory
+        The system memory specification (e.g., '8 GB', '16 GB'). Must include size and unit.
+    
+    .PARAMETER memoryVolatility
+        The memory volatility classification ('Volatile', 'Non-Volatile', 'N/A').
+    
+    .PARAMETER state
+        The physical location state using standard state abbreviations.
+    
+    .PARAMETER building
+        The building identifier where the asset is located.
+    
+    .PARAMETER room
+        The room identifier within the building where the asset is located.
+    
+    .PARAMETER rackSeat
+        The rack or seat designation for data center equipment.
+    
+    .PARAMETER node
+        The node identifier for network topology.
+    
+    .PARAMETER safeAndDrawerNumber
+        The safe and drawer number for secure storage locations.
+    
+    .PARAMETER refreshDate
+        The date when the asset was last refreshed or updated.
+    
+    .PARAMETER macAddress
+        The MAC address for network-enabled devices.
+    
+    .PARAMETER notes
+        Additional notes or comments about the asset.
+    
+    .PARAMETER issues
+        Array of associated issues or tickets related to the asset.
+    
+    .EXAMPLE
+        New-RedmineDB -name "SC-005027" -type "Hard Drive" -SystemMake "TOSHIBA" -SystemModel "P5R3T84A EMC3840" `
+                      -SerialNumber "90L0A0RJTT1F" -ParentHardware "12303" -Program "AETP", "Underground" `
+                      -GSCStatus "Approved" -HardDriveSize "3.8 TB" -State "CT" -Building "CT - C Building" `
+                      -Room "C - Data Center"
+        # Creates a new hard drive asset entry with comprehensive details
+    
+    .EXAMPLE
+        $newParams = @{
+            name                = "WS-001234"
+            description         = "Development workstation"
+            status              = "valid"
+            type                = "Workstation"
+            SystemMake          = "Dell"
+            SystemModel         = "Latitude 7420"
+            OperatingSystem     = "Windows 11"
+            SerialNumber        = "ABC123XYZ"
+            Memory              = "16 GB"
+            HardDriveSize       = "512 GB"
+            State               = "CT"
+            Building            = "Main Building"
+            Room                = "Room 101"
+        }
+        New-RedmineDB @newParams
+        # Creates a new workstation using parameter splatting
+    
+    .EXAMPLE
+        New-RedmineDB -name "VoIP-001" -type "VoIP" -SystemMake "Cisco" -MACAddress "00:1A:2B:3C:4D:5E" `
+                      -State "FL" -Building "Tampa Office" -Room "Conference Room A"
+        # Creates a new VoIP device entry
+    
+    .OUTPUTS
+        PSCustomObject
+        Returns the created database entry object with all assigned properties.
+    
+    .NOTES
+        This function requires an active Redmine connection established via Connect-Redmine.
+        All parameters are validated against predefined lists and formats where applicable.
+        The function will throw descriptive errors for invalid parameter values.
+    
+    .LINK
+        Connect-Redmine
+        Edit-RedmineDB
+        Get-RedmineDB
+        Invoke-ValidateDB
+    #>
     Param (
         [String]$name,
         [String]$type,
@@ -1732,17 +2106,89 @@ function New-RedmineDB {
 
 function Get-RedmineDB {
     <#
-   .SYNOPSIS
-    Get Redmine resource item by id or name
-   .DESCRIPTION
-    Get Redmine resource item by id or name
-   .EXAMPLE
-    Get-RedmineDB -id 438
-   .EXAMPLE
-    Get-RedmineDB -name 'SC-300012'
-   .LINK
-    https://github.pw.utc.com/m335619/RedmineDB
-	#>
+    .SYNOPSIS
+    Retrieves a Redmine database resource item by ID or name.
+
+    .DESCRIPTION
+    The Get-RedmineDB function retrieves a specific Redmine database resource item using either the 
+    unique ID or the name identifier. The function supports two parameter sets for flexible retrieval
+    and can return data in either PowerShell object format or JSON format.
+
+    .PARAMETER Id
+    Specifies the unique identifier of the Redmine database resource to retrieve.
+    This parameter is mandatory when using the 'ID' parameter set.
+    Type: String
+    Parameter Set: ID
+    Position: Named
+    Mandatory: Yes
+
+    .PARAMETER Name
+    Specifies the name identifier of the Redmine database resource to retrieve.
+    This parameter is mandatory when using the 'Name' parameter set.
+    Type: String
+    Parameter Set: Name
+    Position: Named  
+    Mandatory: Yes
+
+    .PARAMETER AsJson
+    When specified, returns the resource data in JSON format instead of PowerShell object format.
+    This is useful for serialization, API responses, or when working with external systems.
+    Type: Switch
+    Position: Named
+    Mandatory: No
+
+    .EXAMPLE
+    Get-RedmineDB -Id 438
+    
+    Retrieves the Redmine database resource with ID 438 and returns it as a PowerShell object.
+
+    .EXAMPLE
+    Get-RedmineDB -Name 'SC-300012'
+    
+    Retrieves the Redmine database resource with the name 'SC-300012' and returns it as a PowerShell object.
+
+    .EXAMPLE
+    Get-RedmineDB -Id 438 -AsJson
+    
+    Retrieves the Redmine database resource with ID 438 and returns it in JSON format for serialization or API use.
+
+    .EXAMPLE
+    $resource = Get-RedmineDB -Name 'SC-300012'
+    if ($resource) {
+        Write-Host "Found resource: $($resource.name)"
+        Write-Host "Status: $($resource.status)"
+    }
+    
+    Retrieves a resource by name and displays basic information about it.
+
+    .OUTPUTS
+    System.Management.Automation.PSCustomObject
+    When -AsJson is not specified, returns a PowerShell custom object with resource properties.
+
+    System.String
+    When -AsJson is specified, returns a JSON-formatted string representation of the resource.
+
+    .NOTES
+    - Either -Id or -Name parameter must be provided (enforced by parameter sets)
+    - The function uses the global Redmine connection established by Connect-Redmine
+    - Returns $null if the resource is not found or if an error occurs
+    - JSON output is formatted with depth of 4 levels for comprehensive serialization
+
+    .LINK
+    Connect-Redmine
+
+    .LINK
+    Set-RedmineDB
+
+    .LINK
+    New-RedmineDB
+
+    .LINK
+    Edit-RedmineDB
+
+    .LINK
+    https://github.pw.utc.com/m335619/Collateral-RedmineDB
+    #>
     [CmdletBinding(DefaultParameterSetName = 'ID' )]
     Param (
         [Parameter(ParameterSetName = 'ID', Mandatory = $true)]
@@ -1753,11 +2199,11 @@ function Get-RedmineDB {
     )
 
     try {
-        if (ID) {
+        if ($Id) {
             if ($AsJson) { $Script:Redmine.DB.Get($id) | ConvertTo-Json -Depth 4; return }
             $Script:Redmine.DB.Get($id).ToPSObject() 
         }
-        elseif (Name) {
+        elseif ($Name) {
             if ($AsJson) { $Script:Redmine.DB.GetByName($name) | ConvertTo-Json -Depth 4; return }
             $Script:Redmine.DB.GetByName($name).ToPSObject()
         }
@@ -1774,27 +2220,256 @@ function Get-RedmineDB {
 
 function Edit-RedmineDB {
     <#
-   .SYNOPSIS
-    Edit a Redmine resource
-   .DESCRIPTION
-    Edit a Redmine resource
-   .EXAMPLE
-  	Edit-RedmineDB -id 12307 -State 'CT' -Building 'CT - C Building' -Room 'C - Data Center'
-   .EXAMPLE
-    $updateParams = @{
-		ID        = '8100'
-		Status    = 'valid'
-		Program   = 'P397'
-		GSCStatus = 'Approved'
-		State     = 'FL'
-		Building  = 'WPB - EOB'
-		Room      = 'EOB - Marlin'
-	}
+    .SYNOPSIS
+    Edits an existing Redmine database resource with updated information.
 
-	Edit-RedmineDB @updateParams
-   .LINK
-    https://github.pw.utc.com/m335619/RedmineDB
-	#>
+    .DESCRIPTION
+    The Edit-RedmineDB function updates an existing Redmine database resource with new or modified 
+    information. This function accepts a comprehensive set of parameters covering all aspects of 
+    hardware and system information that can be tracked in the Redmine database, including hardware
+    specifications, location data, lifecycle information, and administrative details.
+
+    .PARAMETER Id
+    Specifies the unique identifier of the Redmine database resource to edit.
+    This parameter is mandatory and identifies which resource will be updated.
+    Type: String
+    Position: Named
+    Mandatory: Yes
+
+    .PARAMETER Name
+    Specifies the name or identifier for the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Type
+    Specifies the type or category of the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Status
+    Specifies the current status of the resource (e.g., 'valid', 'invalid', 'pending').
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Private
+    Specifies whether the resource is marked as private.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Description
+    Provides a detailed description of the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Tags
+    Specifies an array of tags associated with the resource for categorization.
+    Type: String[]
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER SystemMake
+    Specifies the manufacturer or make of the system.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER SystemModel
+    Specifies the model number or name of the system.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER OperatingSystem
+    Specifies the operating system running on the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER SerialNumber
+    Specifies the manufacturer's serial number of the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER AssetTag
+    Specifies the organizational asset tag identifier.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER PeriodsProcessing
+    Specifies information about processing periods or cycles.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER ParentHardware
+    Specifies the parent hardware system this resource belongs to.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Hostname
+    Specifies the network hostname of the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER HardwareLifecycle
+    Specifies the current lifecycle stage of the hardware.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Programs
+    Specifies an array of programs or projects associated with the resource.
+    Type: String[]
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER GscStatus
+    Specifies the GSC (General Services Catalog) status.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER HardDriveSize
+    Specifies the hard drive or storage capacity.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Memory
+    Specifies the memory or RAM specifications.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER MemoryVolatility
+    Specifies whether the memory is volatile or non-volatile.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER State
+    Specifies the geographical state or region where the resource is located.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Building
+    Specifies the building where the resource is physically located.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Room
+    Specifies the room within the building where the resource is located.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER RackSeat
+    Specifies the rack and seat position of the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Node
+    Specifies the network node identifier.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER SafeAndDrawerNumber
+    Specifies the safe and drawer number for secure storage locations.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER RefreshDate
+    Specifies the date when the resource information was last refreshed.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER MacAddress
+    Specifies the MAC address of the network interface.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Notes
+    Provides additional notes or comments about the resource.
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Issues
+    Specifies an array of known issues associated with the resource.
+    Type: String[]
+    Position: Named
+    Mandatory: No
+
+    .EXAMPLE
+    Edit-RedmineDB -Id 12307 -State 'CT' -Building 'CT - C Building' -Room 'C - Data Center'
+    
+    Updates the location information for resource ID 12307, setting the state to Connecticut,
+    building to 'CT - C Building', and room to 'C - Data Center'.
+
+    .EXAMPLE
+    $updateParams = @{
+        ID        = '8100'
+        Status    = 'valid'
+        Program   = 'P397'
+        GSCStatus = 'Approved'
+        State     = 'FL'
+        Building  = 'WPB - EOB'
+        Room      = 'EOB - Marlin'
+    }
+    Edit-RedmineDB @updateParams
+    
+    Uses parameter splatting to update multiple fields for resource ID 8100, including
+    status, program association, GSC status, and complete location information.
+
+    .EXAMPLE
+    Edit-RedmineDB -Id 15432 -SystemMake 'Dell' -SystemModel 'PowerEdge R740' -Memory '64GB' -HardDriveSize '2TB SSD'
+    
+    Updates hardware specifications for resource ID 15432, including manufacturer,
+    model, memory, and storage information.
+
+    .OUTPUTS
+    None
+    This function does not return output but performs update operations on the Redmine database.
+
+    .NOTES
+    - The -Id parameter is mandatory and must correspond to an existing resource
+    - Uses the ShouldProcess pattern for safe execution with -WhatIf and -Confirm support
+    - All other parameters are optional and will only update the specified fields
+    - Uses the Set-RedmineDB function internally to prepare the resource object
+    - Currently the actual update operation is commented out for safety
+    - Requires an active Redmine connection established by Connect-Redmine
+
+    .LINK
+    Get-RedmineDB
+
+    .LINK
+    Set-RedmineDB
+
+    .LINK
+    New-RedmineDB
+
+    .LINK
+    Connect-Redmine
+
+    .LINK
+    https://github.pw.utc.com/m335619/Collateral-RedmineDB
+    #>
     [CmdletBinding(SupportsShouldProcess )]
     Param (
         [Parameter(Mandatory = $true)]
@@ -1901,17 +2576,75 @@ function Edit-RedmineDBXL {
 
 function Remove-RedmineDB {
     <#
-   .SYNOPSIS
-    Remove a Redmine resource
-   .DESCRIPTION
-    Remove a Redmine DB Entry.
-   .EXAMPLE
-    Remove-RedmineDB id 9955100
-   .EXAMPLE
-    Remove-RedmineDB -name SK-005027
-   .LINK
-    https://github.pw.utc.com/m335619/RedmineDB
-	#>
+    .SYNOPSIS
+    Removes a Redmine database resource by ID or name.
+
+    .DESCRIPTION
+    The Remove-RedmineDB function permanently deletes a Redmine database resource using either 
+    the unique ID or the name identifier. This operation is irreversible and should be used 
+    with caution. The function supports two parameter sets for flexible resource identification.
+
+    .PARAMETER Id
+    Specifies the unique identifier of the Redmine database resource to remove.
+    This parameter is mandatory when using the 'ID' parameter set.
+    Type: String
+    Parameter Set: ID
+    Position: Named
+    Mandatory: Yes
+
+    .PARAMETER Name
+    Specifies the name identifier of the Redmine database resource to remove.
+    This parameter is mandatory when using the 'Name' parameter set.
+    Type: String
+    Parameter Set: Name
+    Position: Named
+    Mandatory: Yes
+
+    .EXAMPLE
+    Remove-RedmineDB -Id 9955100
+    
+    Removes the Redmine database resource with ID 9955100 permanently from the database.
+
+    .EXAMPLE
+    Remove-RedmineDB -Name 'SK-005027'
+    
+    Removes the Redmine database resource with the name 'SK-005027' permanently from the database.
+
+    .EXAMPLE
+    $resourceToDelete = Get-RedmineDB -Name 'OLD-SYSTEM-001'
+    if ($resourceToDelete) {
+        Remove-RedmineDB -Id $resourceToDelete.Id
+        Write-Host "Successfully removed resource: $($resourceToDelete.Name)"
+    }
+    
+    Safely removes a resource by first verifying it exists, then deleting by ID.
+
+    .OUTPUTS
+    None
+    This function does not return output but performs deletion operations on the Redmine database.
+
+    .NOTES
+    - Either -Id or -Name parameter must be provided (enforced by parameter sets)
+    - This operation is permanent and cannot be undone
+    - The function uses the global Redmine connection established by Connect-Redmine
+    - No confirmation prompt is provided - use with caution in production environments
+    - Consider backing up important data before performing delete operations
+
+    .LINK
+    Get-RedmineDB
+
+    .LINK
+    Edit-RedmineDB
+
+    .LINK
+    New-RedmineDB
+
+    .LINK
+    Connect-Redmine
+
+    .LINK
+    https://github.pw.utc.com/m335619/Collateral-RedmineDB
+    #>
     [CmdletBinding(DefaultParameterSetName = 'ID' )]
     Param (
         [Parameter(ParameterSetName = 'ID', Mandatory = $true)]
@@ -1928,18 +2661,75 @@ function Remove-RedmineDB {
 
 function Import-RedmineEnv {
     <#
-	.SYNOPSIS
-	 Imports variables from an ENV file
-	.EXAMPLE
-	 Import-RedmineEnv
-	.EXAMPLE
-	 Import-RedmineEnv path/to/env
-	.EXAMPLE
-	 See what the command will do before it runs
-	 Import-RedmineEnv -whatif
-	.EXAMPLE
-	 Import-RedmineEnv -type regular
-	#>
+    .SYNOPSIS
+    Imports environment variables from an .env configuration file.
+
+    .DESCRIPTION
+    The Import-RedmineEnv function reads configuration settings from an .env file and imports them 
+    as either environment variables or PowerShell script variables. This is useful for managing 
+    configuration settings, API keys, and other environment-specific values without hardcoding 
+    them in scripts.
+
+    .PARAMETER Path
+    Specifies the path to the .env file to import. 
+    Default: "C:\Users\$env:USERNAME\OneDrive - Raytheon Technologies\.env"
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Type
+    Determines how the variables are imported into the PowerShell session.
+    Valid values:
+    - 'Environment': Creates environment variables accessible via $env:VariableName
+    - 'Regular': Creates PowerShell script variables accessible via $VariableName
+    Default: 'Environment'
+    Type: String
+    Position: Named
+    Mandatory: No
+
+    .EXAMPLE
+    Import-RedmineEnv
+    
+    Imports variables from the default .env file location as environment variables.
+
+    .EXAMPLE
+    Import-RedmineEnv -Path "C:\Config\.env"
+    
+    Imports variables from a custom .env file path as environment variables.
+
+    .EXAMPLE
+    Import-RedmineEnv -Type Regular
+    
+    Imports variables from the default .env file as PowerShell script variables instead of environment variables.
+
+    .EXAMPLE
+    Import-RedmineEnv -Path "C:\Projects\MyApp\.env" -Type Regular
+    
+    Imports variables from a specific .env file as PowerShell script variables.
+
+    .EXAMPLE
+    Import-RedmineEnv -WhatIf
+    
+    Shows what the command will do without actually importing the variables (dry run).
+
+    .OUTPUTS
+    None
+    This function does not return output but creates variables in the specified scope.
+
+    .NOTES
+    - The .env file should contain key=value pairs, one per line
+    - Comments and empty lines in the .env file are ignored
+    - Environment variables are accessible system-wide during the session
+    - Regular variables are only accessible within the PowerShell script scope
+    - The function includes error handling for missing files or malformed content
+    - Supports aliases: 'Dotenv', 'Import-Env'
+
+    .LINK
+    Connect-Redmine
+
+    .LINK
+    https://github.pw.utc.com/m335619/Collateral-RedmineDB
+    #>
     [CmdletBinding()]
     [Alias('Dotenv', 'Import-Env')]
     param(
@@ -1968,17 +2758,97 @@ function Import-RedmineEnv {
 
 function Invoke-DecomissionDB {
     <#
-   .SYNOPSIS
-    Decomission a Redmine resource
-   .DESCRIPTION
-    Decomission a Redmine DB Entry.
-   .EXAMPLE
-    Invoke-DecomissionDB -id 29551 -Decommissioned Destruction
-   .EXAMPLE
-    Invoke-DecomissionDB -id 29551 -Disposition
-   .LINK
-    https://github.pw.utc.com/m335619/RedmineDB
-	#>
+    .SYNOPSIS
+    Decommissions a Redmine database resource with specified disposition or decommission status.
+
+    .DESCRIPTION
+    The Invoke-DecomissionDB function updates a Redmine database resource to mark it as decommissioned
+    with appropriate status and disposition information. This function supports two parameter sets:
+    'Decommissioned' for standard decommissioning workflows and 'Disposition' for vendor-related actions.
+    The function automatically sets the status to 'invalid' and programs to 'None' for decommissioned items.
+
+    .PARAMETER Id
+    Specifies the unique identifier of the Redmine database resource to decommission.
+    This parameter is mandatory for all parameter sets.
+    Type: String
+    Position: Named
+    Mandatory: Yes
+
+    .PARAMETER Decommissioned
+    Specifies the decommissioning disposition for the resource.
+    Valid values:
+    - 'Collateral': Resource treated as collateral damage
+    - 'Destruction': Resource scheduled for destruction
+    - 'Reuse': Resource designated for reuse
+    - 'Returned to Vendor': Resource returned to the vendor
+    Parameter Set: Decommissioned
+    Type: String (ValidateSet)
+    Position: Named
+    Mandatory: No
+
+    .PARAMETER Disposition
+    Specifies vendor-related disposition actions for the resource.
+    Valid values:
+    - 'Vendor Repair': Resource sent to vendor for repair
+    - 'Destroyed': Resource has been destroyed
+    Parameter Set: Disposition
+    Type: Switch (ValidateSet)
+    Position: Named
+    Mandatory: No
+
+    .EXAMPLE
+    Invoke-DecomissionDB -Id 29551 -Decommissioned 'Destruction'
+    
+    Decommissions resource ID 29551 with destruction disposition, setting status to invalid 
+    and removing all program associations.
+
+    .EXAMPLE
+    Invoke-DecomissionDB -Id 29551 -Disposition 'Vendor Repair'
+    
+    Sets resource ID 29551 with vendor repair disposition and removes program associations.
+
+    .EXAMPLE
+    Invoke-DecomissionDB -Id 12345 -Decommissioned 'Returned to Vendor'
+    
+    Decommissions resource ID 12345 as returned to vendor, marking it as invalid and 
+    clearing program assignments.
+
+    .EXAMPLE
+    $resourcesToDecommission = @(29551, 29552, 29553)
+    foreach ($id in $resourcesToDecommission) {
+        Invoke-DecomissionDB -Id $id -Decommissioned 'Collateral'
+        Write-Host "Decommissioned resource $id as collateral"
+    }
+    
+    Bulk decommissions multiple resources with collateral disposition.
+
+    .OUTPUTS
+    None
+    This function does not return output but updates the Redmine database resource status.
+
+    .NOTES
+    - Either -Decommissioned or -Disposition parameter must be provided
+    - The function automatically sets status to 'invalid' for decommissioned items
+    - All program associations are cleared (set to 'None') during decommissioning
+    - GSC status is updated with the decommission type and disposition
+    - The actual update operation is currently commented out for safety
+    - Requires an active Redmine connection established by Connect-Redmine
+
+    .LINK
+    Get-RedmineDB
+
+    .LINK
+    Edit-RedmineDB
+
+    .LINK
+    Remove-RedmineDB
+
+    .LINK
+    Set-RedmineDB
+
+    .LINK
+    https://github.pw.utc.com/m335619/Collateral-RedmineDB
+    #>
     [CmdletBinding(DefaultParameterSetName = 'Decommissioned' )]
     [CmdletBinding()]
     Param (

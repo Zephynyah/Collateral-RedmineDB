@@ -1330,6 +1330,8 @@ function Get-ApiKey {
         The client secret for authentication
     .PARAMETER Server
         The server URL (defaults to http://localhost:3000)
+    .PARAMETER ApiPath
+        Optional API path to prepend to the auth endpoint
     .EXAMPLE
         Get-ApiKey
         # Uses default demo client credentials
@@ -1350,9 +1352,13 @@ function Get-ApiKey {
         [ValidateNotNullOrEmpty()]
         [string]$ClientSecret = "demo-secret-123",
 
-        [Parameter()]
+        [Parameter(Mandatory = $false)]
         [ValidateNotNullOrEmpty()]
-        [string]$Server = "http://localhost:3000"
+        [string]$Server = "http://localhost:3000",
+
+        [Parameter(Mandatory = $false)]
+        [ValidatePattern('^\/.*')]
+        [string]$ApiPath
     )
     
     begin {
@@ -1362,7 +1368,13 @@ function Get-ApiKey {
     process {
         try {
             # Prepare request parameters
-            $uri = "$($Server.TrimEnd('/'))/api/auth/apikey"
+            if($ApiPath) {
+                $uri = "$($Server.TrimEnd('/'))/$($ApiPath.TrimEnd('/'))/auth/apikey"
+            }
+            else {
+                $uri = "$($Server.TrimEnd('/'))/auth/apikey"
+            }
+            
             $headers = @{
                 'Content-Type' = 'application/json'
                 'Accept' = 'application/json'
@@ -1384,10 +1396,12 @@ function Get-ApiKey {
             
             Write-LogDebug "Sending request to: $uri"
             $response = Invoke-RestMethod @requestParams
-            
-            if ($response.apikey) {
+
+            Write-LogDebug "Received response: $response"
+
+            if ($response.api_key) {
                 Write-LogInfo "Successfully retrieved API key"
-                return $response.apikey
+                return $response.api_key
             } else {
                 throw "No API key returned in response"
             }
