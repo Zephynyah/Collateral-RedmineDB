@@ -289,7 +289,7 @@ class DB {
         $this.Tags = @()
         $this.Issues = @()
     }
-    
+
     # Convert object to JSON for API requests
     [string] ToJson() {
         $json = @{ 
@@ -801,7 +801,6 @@ function ConvertTo-RedmineCustomField {
     
     return $formattedFields
 }
-
 
 function Connect-Redmine {
     <#
@@ -1753,16 +1752,24 @@ function Get-RedmineDB {
         [switch]$AsJson
     )
 
-    switch ($PsCmdlet.ParameterSetName) {
-        ID { 
-            if ($AsJson) { $Script:Redmine.DB.Get($id).ToJson(); return }
+    try {
+        if (ID) {
+            if ($AsJson) { $Script:Redmine.DB.Get($id) | ConvertTo-Json -Depth 4; return }
             $Script:Redmine.DB.Get($id).ToPSObject() 
         }
-        Name {
-            if ($AsJson) { $Script:Redmine.DB.GetByName($name).ToJson(); return }
+        elseif (Name) {
+            if ($AsJson) { $Script:Redmine.DB.GetByName($name) | ConvertTo-Json -Depth 4; return }
             $Script:Redmine.DB.GetByName($name).ToPSObject()
         }
-    } 	
+        else {
+            Write-LogError "Either -Id or -Name must be provided"
+            return $null
+        }
+    }
+    catch {
+        <#Do this if a terminating exception happens#>
+        Write-LogError "Failed to get Redmine DB entry" -Exception $_.Exception
+    }
 }
 
 function Edit-RedmineDB {
@@ -2026,7 +2033,6 @@ $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
 }
 
 #endregion
-
 # Module initialization message
 Write-LogInfo "Collateral-RedmineDB module v$($script:ModuleConstants.ApiVersion) loaded successfully"
 
