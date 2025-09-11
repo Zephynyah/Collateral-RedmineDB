@@ -365,7 +365,7 @@ function Export-ExcelData {
                 for ($row = 0; $row -lt $allData.Count; $row++) {
                     for ($col = 1; $col -le $properties.Count; $col++) {
                         $value = $allData[$row].($properties[$col - 1])
-                        if ($value -ne $null) {
+                        if ($null -ne $value) {
                             $worksheet.Cells.Item($row + 2, $col) = $value.ToString()
                         }
                     }

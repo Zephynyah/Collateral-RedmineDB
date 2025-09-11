@@ -11,21 +11,24 @@ try {
     Connect-Redmine -Server "http://localhost:3000" -Key $key
 
 
-    Set-LogLevel -Level Debug
+    # # Set-LogLevel -Level Debug
 
 
-    # # Get Redmine Asset by ID
-    # Get-RedmineDB -Id 18721 -AsJson
+    # # # Get Redmine Asset by ID
+    # # Get-RedmineDB -Id 18721 -AsJson
 
 
-    # # Get Redmine Asset by Name
-    # Get-RedmineDB -Name "00-008584"
+    # # # Get Redmine Asset by Name
+    # # Get-RedmineDB -Name "00-008584"
 
-    # New state hashtable usage
-    # $states = Get-SettingsData -DataName "DBvalidState"
-    # $states['CA']  # Returns "California"
+    # # New state hashtable usage
+    # # $states = Get-SettingsData -DataName "DBvalidState"
+    # # $states['CA']  # Returns "California"
 
-    Search-RedmineDB -Field serialnumber -Keyword 'BL05KQ3' 
+    # Search-RedmineDB -Field serialnumber -Keyword 'FCH14178QZ2' 
+
+    # # Search by serial number
+    # Search-RedmineDB -Field macaddress -Keyword '1C17D340A4C1' 
 
 }
 catch {

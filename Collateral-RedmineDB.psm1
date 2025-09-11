@@ -1366,7 +1366,7 @@ function Search-RedmineDB {
     .PARAMETER Keyword
         The search term to look for. Supports regex patterns for most fields.
     .PARAMETER Field
-        The field to search in. Valid options: 'name', 'parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress'
+        The field to search in. Valid options: 'parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress'
     .PARAMETER Status
         Filter results by status. Valid options: 'valid', 'to verify', 'invalid', '*' (all)
     .PARAMETER CaseSensitive
@@ -1401,7 +1401,7 @@ function Search-RedmineDB {
         [ValidateNotNullOrEmpty()]
         [string] $Keyword,
 
-        [ValidateSet('name', 'parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress')]
+        [ValidateSet('parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress')]
         [string] $Field = 'name',
         
         [ValidateSet('valid', 'to verify', 'invalid', '*')]
@@ -1476,13 +1476,15 @@ function Search-RedmineDB {
                     $fieldId = $fieldMappings['model']
                     if ($ExactMatch) {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
                     }
                     else {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
@@ -1499,13 +1501,15 @@ function Search-RedmineDB {
                     $fieldId = $fieldMappings['serialnumber']
                     if ($ExactMatch) {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
                     }
                     else {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
@@ -1522,7 +1526,8 @@ function Search-RedmineDB {
                     $fieldId = $fieldMappings['parent']
                     # Parent ID should always be exact match
                     { param($entry) 
-                        $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                        $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                        $fieldValue = if ($customField) { $customField.value } else { $null }
                         $null -ne $fieldValue -and $fieldValue -eq $Keyword
                     }
                 }
@@ -1532,13 +1537,15 @@ function Search-RedmineDB {
                     $fieldId = $fieldMappings['hostname']
                     if ($ExactMatch) {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
                     }
                     else {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
@@ -1555,7 +1562,8 @@ function Search-RedmineDB {
                     $fieldId = $fieldMappings['program']
                     if ($ExactMatch) {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             if ($fieldValue -is [array]) {
                                 $fieldValue -contains $Keyword
                             }
@@ -1566,7 +1574,8 @@ function Search-RedmineDB {
                     }
                     else {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             if ($fieldValue -is [array]) {
                                 $fieldValue | Where-Object { 
                                     if ($CaseSensitive) {
@@ -1595,13 +1604,15 @@ function Search-RedmineDB {
                     $fieldId = $fieldMappings['mac']
                     if ($ExactMatch) {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
                     }
                     else {
                         { param($entry) 
-                            $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
+                            $customField = $entry.CustomFields | Where-Object id -eq $fieldId
+                            $fieldValue = if ($customField) { $customField.value } else { $null }
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
@@ -1629,26 +1640,6 @@ function Search-RedmineDB {
                             }
                             else {
                                 $entry.Type.name -imatch $Keyword
-                            }
-                        }
-                    }
-                }
-                
-                'name' { 
-                    Write-LogDebug "Searching by name with ExactMatch=$ExactMatch, CaseSensitive=$CaseSensitive"
-                    if ($ExactMatch) {
-                        { param($entry) 
-                            $null -ne $entry.Name -and $entry.Name.Equals($Keyword, $comparisonType)
-                        }
-                    }
-                    else {
-                        { param($entry) 
-                            if ($null -eq $entry.Name) { return $false }
-                            if ($CaseSensitive) {
-                                $entry.Name -cmatch $Keyword
-                            }
-                            else {
-                                $entry.Name -imatch $Keyword
                             }
                         }
                     }
