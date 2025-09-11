@@ -197,6 +197,14 @@ class Logger {
     }
 
     # Format log message
+    # Sanitize URLs by truncating API keys for security
+    hidden [string] SanitizeMessage([string]$message) {
+        # Pattern to match key= followed by hexadecimal characters
+        $keyPattern = '(\?|&)key=([a-fA-F0-9]{8})[a-fA-F0-9]*'
+        $sanitizedMessage = $message -replace $keyPattern, '$1key=$2...[TRUNCATED]'
+        return $sanitizedMessage
+    }
+
     hidden [string] FormatMessage([LogLevel]$level, [string]$message, [string]$source) {
         $parts = @()
 
@@ -212,7 +220,9 @@ class Logger {
             $parts += "[$source]"
         }
 
-        $parts += $message
+        # Sanitize the message to truncate API keys
+        $sanitizedMessage = $this.SanitizeMessage($message)
+        $parts += $sanitizedMessage
 
         return $parts -join " "
     }
@@ -308,10 +318,19 @@ class Logger {
     hidden [void] WriteToConsole([LogLevel]$level, [string]$message) {
         if ($this.Config.EnableColorOutput -and $this.Config.LevelColors.ContainsKey($level.ToString())) {
             $color = $this.Config.LevelColors[$level.ToString()]
-           if ($message.ToString() -ilike "*success*") { Write-Host $message -ForegroundColor Green } else { Write-Host $message -ForegroundColor $color }
+
+            if ($message.ToString() -ilike "*success*" -and (-not $message.ToString() -ilike "*failed*")) {
+                Write-Host $message -ForegroundColor Green
+            }
+            else {
+                Write-Host $message -ForegroundColor $color 
+            }
         }
         else {
-            if ($message.ToString() -ilike "*success*") { Write-Host $message -ForegroundColor Green } else { Write-Host $message }
+            if ($message.ToString() -ilike "*success*" -and (-not $message.ToString() -ilike "*failed*")) {
+                Write-Host $message -ForegroundColor Green
+            }
+            else { Write-Host $message }
         }
     }
 

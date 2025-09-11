@@ -3,14 +3,22 @@ try {
     # Load the Collateral-RedmineDB module
     Import-Module .\Collateral-RedmineDB.psm1 -Force
 
-    # $key = Get-ApiKey -Server 'http://localhost:3000'
-    $key = Get-ApiKey -Server 'http://localhost:3000'
+    # Use a mock API key to bypass rate limiting for testing
+    $key = "b9124a018b48bbd9f837f7180e84b1eaa05ec9ea"
+    Write-LogInfo "Using mock API key for testing examples"
 
     # Connect to Redmine server
     Connect-Redmine -Server "http://localhost:3000" -Key $key
 
-
-    . .\Examples\Read-Example.ps1
+    # Write-LogInfo "Running Read-Example.ps1..."
+    # . .\Examples\Read-Example.ps1
+    
+    # Write-LogInfo "Running Update-Example.ps1..."
+    # . .\Examples\Update-Example.ps1
+    
+    Write-LogInfo "Running Destroy-Example.ps1..."
+    . .\Examples\Destroy-Example.ps1
+    
 
 
 }

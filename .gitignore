@@ -439,5 +439,5 @@ module-cache/
 # PowerShell execution policy backup
 execution-policy.bak
 
-
+Examples/*.csv
 Old/

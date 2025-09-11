@@ -338,12 +338,12 @@ class DB {
         $fields = [PSCustomObject]@{
             ID          = $this.Id
             Name        = $this.Name
-            Type        = if ($this.Type -and $this.Type.name) { $this.Type.name } else { $null }
-            Status      = if ($this.Status -and $this.Status.name) { $this.Status.name } else { $null }
+            Type        = if ($this.Type -and $this.Type.PSObject.Properties['name']) { $this.Type.name } else { $null }
+            Status      = if ($this.Status -and $this.Status.PSObject.Properties['name']) { $this.Status.name } else { $null }
             Private     = $this.IsPrivate
-            Project     = if ($this.Project -and $this.Project.name) { $this.Project.name } else { $null }
+            Project     = if ($this.Project -and $this.Project.PSObject.Properties['name']) { $this.Project.name } else { $null }
             Tags        = if ($this.Tags) { ($this.Tags.name -join ", ") } else { $null }
-            Author      = if ($this.Author -and $this.Author.name) { $this.Author.name } else { $null }
+            Author      = if ($this.Author -and $this.Author.PSObject.Properties['name']) { $this.Author.name } else { $null }
             Description = $this.Description
             Created     = $this.CreatedOn
             Updated     = $this.UpdatedOn
@@ -442,11 +442,18 @@ class DB {
         try {
             # Simple URL encoding without requiring System.Web
             $encodedName = [System.Uri]::EscapeDataString($Name)
+            Write-LogDebug "GetByName: Requesting URL: db.json?name=$encodedName&limit=1"
             $response = $this.Request('GET', "db.json?name=$encodedName&limit=1")
+            Write-LogDebug "GetByName: Response received. Type: $($response.GetType().Name)"
+            Write-LogDebug "GetByName: Response properties: $($response.PSObject.Properties.Name -join ', ')"
+            
             # Check if any entries were returned
             if (-not $response.db_entries -or $response.db_entries.Count -eq 0) {
-                throw "No DB entry found with name: $Name"
+                Write-LogWarn "GetByName: No db_entries found in response"
+                return $null
             }
+            Write-LogDebug "GetByName: Found $($response.db_entries.Count) entries"
+            
             # Create a new DB object
             $dbObject = [DB]::new($this.Server, $this.Session)
             # Map JSON properties to DB object properties with proper case and naming
@@ -486,25 +493,9 @@ class DB {
                     $dbItem = [DB]::new($this.Server, $this.Session)
                     
                     # Map JSON properties to DB object properties with proper case and naming
-                    $propertyMap = @{
-                        'id'            = 'Id'
-                        'name'          = 'Name'
-                        'description'   = 'Description'
-                        'is_private'    = 'IsPrivate'
-                        'project'       = 'Project'
-                        'status'        = 'Status'
-                        'type'          = 'Type'
-                        'author'        = 'Author'
-                        'tags'          = 'Tags'
-                        'custom_fields' = 'CustomFields'
-                        'issues'        = 'Issues'
-                        'created_on'    = 'CreatedOn'
-                        'updated_on'    = 'UpdatedOn'
-                    }
-                    
                     foreach ($jsonProperty in $entry.PSObject.Properties.Name) {
-                        if ($propertyMap.ContainsKey($jsonProperty)) {
-                            $dbProperty = $propertyMap[$jsonProperty]
+                        if ($script:propertyMap.ContainsKey($jsonProperty)) {
+                            $dbProperty = $script:propertyMap[$jsonProperty]
                             $dbItem.$dbProperty = $entry.$jsonProperty
                         }
                     }
@@ -1402,7 +1393,7 @@ function Search-RedmineDB {
         [string] $Keyword,
 
         [ValidateSet('parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress')]
-        [string] $Field = 'name',
+        [string] $Field = 'serialnumber',
         
         [ValidateSet('valid', 'to verify', 'invalid', '*')]
         [string] $Status = '*',
@@ -1867,37 +1858,48 @@ function Set-RedmineDB {
         [PSCustomObject[]]$issues
     )
 	
-    $resource = $Redmine.new('db')
+    # Create a new DB object using reflection to access hidden properties
+    $resource = [DB]::new()
+    
+    # Get the existing DB object's hidden properties using reflection
+    $existingDB = $script:Redmine.DB
+    $serverProperty = $existingDB.GetType().GetField('Server', [System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::Instance)
+    $sessionProperty = $existingDB.GetType().GetField('Session', [System.Reflection.BindingFlags]::NonPublic -bor [System.Reflection.BindingFlags]::Instance)
+    
+    if ($serverProperty -and $sessionProperty) {
+        $serverProperty.SetValue($resource, $serverProperty.GetValue($existingDB))
+        $sessionProperty.SetValue($resource, $sessionProperty.GetValue($existingDB))
+    }
 	
     foreach ($boundparam in $PSBoundParameters.GetEnumerator()) {
         If ($null -eq $boundparam.Value) { continue }
         Switch ($boundparam.Key) {
-            'private' { $resource.is_private = [bool]( @('yes', 1, '1', 'y', 'true') -contains $boundparam.Value.ToLower()) }
-            'type' { $resource.type = @{ id = $script:DBType[$boundparam.Value] } }
-            'status' { $resource.status = @{ id = $script:DBStatus[$boundparam.Value] } }
-            'systemMake' { $resource.custom_fields += @{ id = 101; value = $boundparam.Value } }
-            'systemModel' { $resource.custom_fields += @{ id = 102; value = $boundparam.Value } }
-            'operatingSystem' { $resource.custom_fields += @{ id = 105; value = $boundparam.Value } }
-            'serialNumber' { $resource.custom_fields += @{ id = 106; value = $boundparam.Value } }
-            'assetTag' { $resource.custom_fields += @{ id = 107; value = $boundparam.Value } }
-            'periodsProcessing' { $resource.custom_fields += @{ id = 113; value = $boundparam.Value } }
-            'parentHardware' { $resource.custom_fields += @{ id = 114; value = $boundparam.Value } }
-            'hostname' { $resource.custom_fields += @{ id = 115; value = $boundparam.Value } }
-            'hardwareLifecycle' { $resource.custom_fields += @{ id = 190; value = $boundparam.Value } }
-            'programs' { $resource.custom_fields += @{ id = 116; value = $boundparam.Value } }
-            'gscStatus' { $resource.custom_fields += @{ id = 117; value = $boundparam.Value } }
-            'memory' { $resource.custom_fields += @{ id = 119; value = $boundparam.Value } }
-            'hardDriveSize' { $resource.custom_fields += @{ id = 120; value = $boundparam.Value } }
-            'memoryVolatility' { $resource.custom_fields += @{ id = 124; value = $boundparam.Value } }
-            'state' { $resource.custom_fields += @{ id = 109; value = $boundparam.Value } }
-            'building' { $resource.custom_fields += @{ id = 126; value = $boundparam.Value } }
-            'room' { $resource.custom_fields += @{ id = 127; value = $boundparam.Value } }
-            'rackSeat' { $resource.custom_fields += @{ id = 112; value = $boundparam.Value } }
-            'node' { $resource.custom_fields += @{ id = 125; value = $boundparam.Value } }
-            'safeAndDrawerNumber' { $resource.custom_fields += @{ id = 128; value = $boundparam.Value } }
-            'refreshDate' { $resource.custom_fields += @{ id = 108; value = $boundparam.Value } }
-            'macAddress' { $resource.custom_fields += @{ id = 150; value = $boundparam.Value } }
-            'issues' { $boundparam.Value | ForEach-Object { $resource.issues += @{ id = $_ } } }
+            'private' { $resource.IsPrivate = [bool]( @('yes', 1, '1', 'y', 'true') -contains $boundparam.Value.ToLower()) }
+            'type' { $resource.Type = @{ id = $script:DBType[$boundparam.Value] } }
+            'status' { $resource.Status = @{ id = $script:DBStatus[$boundparam.Value] } }
+            'systemMake' { $resource.CustomFields += @{ id = 101; value = $boundparam.Value } }
+            'systemModel' { $resource.CustomFields += @{ id = 102; value = $boundparam.Value } }
+            'operatingSystem' { $resource.CustomFields += @{ id = 105; value = $boundparam.Value } }
+            'serialNumber' { $resource.CustomFields += @{ id = 106; value = $boundparam.Value } }
+            'assetTag' { $resource.CustomFields += @{ id = 107; value = $boundparam.Value } }
+            'periodsProcessing' { $resource.CustomFields += @{ id = 113; value = $boundparam.Value } }
+            'parentHardware' { $resource.CustomFields += @{ id = 114; value = $boundparam.Value } }
+            'hostname' { $resource.CustomFields += @{ id = 115; value = $boundparam.Value } }
+            'hardwareLifecycle' { $resource.CustomFields += @{ id = 190; value = $boundparam.Value } }
+            'programs' { $resource.CustomFields += @{ id = 116; value = $boundparam.Value } }
+            'gscStatus' { $resource.CustomFields += @{ id = 117; value = $boundparam.Value } }
+            'memory' { $resource.CustomFields += @{ id = 119; value = $boundparam.Value } }
+            'hardDriveSize' { $resource.CustomFields += @{ id = 120; value = $boundparam.Value } }
+            'memoryVolatility' { $resource.CustomFields += @{ id = 124; value = $boundparam.Value } }
+            'state' { $resource.CustomFields += @{ id = 109; value = $boundparam.Value } }
+            'building' { $resource.CustomFields += @{ id = 126; value = $boundparam.Value } }
+            'room' { $resource.CustomFields += @{ id = 127; value = $boundparam.Value } }
+            'rackSeat' { $resource.CustomFields += @{ id = 112; value = $boundparam.Value } }
+            'node' { $resource.CustomFields += @{ id = 125; value = $boundparam.Value } }
+            'safeAndDrawerNumber' { $resource.CustomFields += @{ id = 128; value = $boundparam.Value } }
+            'refreshDate' { $resource.CustomFields += @{ id = 108; value = $boundparam.Value } }
+            'macAddress' { $resource.CustomFields += @{ id = 150; value = $boundparam.Value } }
+            'issues' { $boundparam.Value | ForEach-Object { $resource.Issues += @{ id = $_ } } }
             default {
                 If ($boundparam.Key -In $resource.PSobject.Properties.Name) {
                     $resource.$($boundparam.Key) = $boundparam.Value
