@@ -61,6 +61,7 @@ $script:ModuleConstants = [PSCustomObject]@{
     DefaultTimeout = [int]30
     ApiVersion     = [string]'1.0'
     UserAgent      = [string]"PowerShell-RedmineDB/1.0.3"
+    ApiEndpoint    = [string]'/api'
 }
 
 # Custom field IDs mapping for better maintainability
@@ -87,6 +88,22 @@ $script:CustomFieldIds = @{
     SafeAndDrawerNumber = 128
     MACAddress          = 150
     HardwareLifecycle   = 190
+}
+
+$script:propertyMap = @{
+    'id'            = 'Id'
+    'name'          = 'Name'
+    'description'   = 'Description'
+    'is_private'    = 'IsPrivate'
+    'project'       = 'Project'
+    'status'        = 'Status'
+    'type'          = 'Type'
+    'author'        = 'Author'
+    'tags'          = 'Tags'
+    'custom_fields' = 'CustomFields'
+    'issues'        = 'Issues'
+    'created_on'    = 'CreatedOn'
+    'updated_on'    = 'UpdatedOn'
 }
 
 #region Module Data Import from Settings Module
@@ -241,7 +258,7 @@ class DB {
     hidden [string] $Server
     hidden [object] $Session
     hidden [string] $SetName = 'db'
-    hidden [string] $Include = ''
+    hidden [string] $Include = "" #'custom_fields'
     
     # Public properties
     [string] $Id
@@ -374,55 +391,40 @@ class DB {
         do {
             try {
                 $response = Invoke-RestMethod @requestParams
-                Write-LogDebug "API request successful: $Method $Uri"
+                Write-LogDebug "API request successful: $Method $($requestParams.Uri)"
                 return $response
             }
             catch {
                 $retryCount++
                 if ($retryCount -ge $script:ModuleConstants.MaxRetries) {
-                    Write-LogError "API request failed after $retryCount attempts: $Method $Uri" -Exception $_.Exception
+                    Write-LogError "API request failed after $retryCount attempts: $Method $($requestParams.Uri)" -Exception $_.Exception
                     throw
                 }
-                Write-LogWarn "API request failed, retrying ($retryCount/$($script:ModuleConstants.MaxRetries)): $Method $Uri" -Exception $_.Exception
+                Write-LogWarn "API request failed, retrying ($retryCount/$($script:ModuleConstants.MaxRetries)): $Method $($requestParams.Uri)" -Exception $_.Exception
                 Start-Sleep -Seconds $retryCount
             }
         } while ($retryCount -lt $script:ModuleConstants.MaxRetries)
         return $null
     }
     # CRUD Operations
-    [DB] Get([string] $Id) {
+    [PSCustomObject] Get([string] $Id) {
         if ([string]::IsNullOrWhiteSpace($Id)) {
             throw "ID parameter cannot be null or empty"
         }
         
         try {
-            $response = $this.Request('GET', "$($this.SetName)/$Id.json$($this.Include)")
+            # $response = $this.Request('GET', "$($this.SetName)/$Id.json$($this.Include)")
+            $Response = $this.request('GET', $this.setname + '/' + $id + '.json' + $this.include)
             $dbObject = [DB]::new($this.Server, $this.Session)
             
             # Map JSON properties to DB object properties with proper case and naming
-            $propertyMap = @{
-                'id' = 'Id'
-                'name' = 'Name'
-                'description' = 'Description'
-                'is_private' = 'IsPrivate'
-                'project' = 'Project'
-                'status' = 'Status'
-                'type' = 'Type'
-                'author' = 'Author'
-                'tags' = 'Tags'
-                'custom_fields' = 'CustomFields'
-                'issues' = 'Issues'
-                'created_on' = 'CreatedOn'
-                'updated_on' = 'UpdatedOn'
-            }
-            
             foreach ($jsonProperty in $response.db_entry.PSObject.Properties.Name) {
-                if ($propertyMap.ContainsKey($jsonProperty)) {
-                    $dbProperty = $propertyMap[$jsonProperty]
-                    Write-LogInfo "Mapping JSON property '$jsonProperty' to DB property '$dbProperty'"
-                    Write-LogInfo "  JSON value: $($response.db_entry.$jsonProperty)"
+                if ($script:propertyMap.ContainsKey($jsonProperty)) {
+                    $dbProperty = $script:propertyMap[$jsonProperty]
+                    Write-LogDebug "Mapping JSON property '$jsonProperty' to DB property '$dbProperty'"
+                    Write-LogDebug "  JSON value: $($response.db_entry.$jsonProperty)"
                     $dbObject.$dbProperty = $response.db_entry.$jsonProperty
-                    Write-LogInfo "  DB property after mapping: $($dbObject.$dbProperty)"
+                    Write-LogDebug "  DB property after mapping: $($dbObject.$dbProperty)"
                 }
             }
             
@@ -435,30 +437,30 @@ class DB {
         }
     }
     
-    [DB] GetByName([string] $Name) {
-        if ([string]::IsNullOrWhiteSpace($Name)) {
-            throw "Name parameter cannot be null or empty"
-        }
+    [Object] GetByName([string] $Name) {
+        if ([string]::IsNullOrWhiteSpace($Name)) { throw "Name parameter cannot be null or empty" }
         
         try {
             # Simple URL encoding without requiring System.Web
             $encodedName = [System.Uri]::EscapeDataString($Name)
             $response = $this.Request('GET', "db.json?name=$encodedName&limit=1")
-            
+            # Check if any entries were returned
             if (-not $response.db_entries -or $response.db_entries.Count -eq 0) {
                 throw "No DB entry found with name: $Name"
             }
-            
+            # Create a new DB object
             $dbObject = [DB]::new($this.Server, $this.Session)
-            $entry = $response.db_entries[0]
-            
-            foreach ($property in $entry.PSObject.Properties.Name) {
-                if ($dbObject.PSObject.Properties.Name -contains $property) {
-                    $dbObject.$property = $entry.$property
+            # Map JSON properties to DB object properties with proper case and naming
+            foreach ($jsonProperty in $response.db_entries[0].PSObject.Properties.Name) {
+                if ($script:propertyMap.ContainsKey($jsonProperty)) {
+                    $dbProperty = $script:propertyMap[$jsonProperty]
+                    Write-LogDebug "Mapping JSON property '$jsonProperty' to DB property '$dbProperty'"
+                    Write-LogDebug "  JSON value: $($response.db_entries[0].$jsonProperty)"
+                    $dbObject.$dbProperty = $response.db_entries[0].$jsonProperty
+                    Write-LogDebug "  DB property after mapping: $($dbObject.$dbProperty)"
                 }
             }
-            
-            Write-LogInfo "Successfully retrieved DB entry with name: $Name"
+            # Write-LogInfo "Successfully retrieved DB entry with name: $Name"
             return $dbObject
         }
         catch {
@@ -486,19 +488,19 @@ class DB {
                     
                     # Map JSON properties to DB object properties with proper case and naming
                     $propertyMap = @{
-                        'id' = 'Id'
-                        'name' = 'Name'
-                        'description' = 'Description'
-                        'is_private' = 'IsPrivate'
-                        'project' = 'Project'
-                        'status' = 'Status'
-                        'type' = 'Type'
-                        'author' = 'Author'
-                        'tags' = 'Tags'
+                        'id'            = 'Id'
+                        'name'          = 'Name'
+                        'description'   = 'Description'
+                        'is_private'    = 'IsPrivate'
+                        'project'       = 'Project'
+                        'status'        = 'Status'
+                        'type'          = 'Type'
+                        'author'        = 'Author'
+                        'tags'          = 'Tags'
                         'custom_fields' = 'CustomFields'
-                        'issues' = 'Issues'
-                        'created_on' = 'CreatedOn'
-                        'updated_on' = 'UpdatedOn'
+                        'issues'        = 'Issues'
+                        'created_on'    = 'CreatedOn'
+                        'updated_on'    = 'UpdatedOn'
                     }
                     
                     foreach ($jsonProperty in $entry.PSObject.Properties.Name) {
@@ -685,7 +687,7 @@ class ValidateGSCStatus : ValidatorBase {
     
     [void] ValidateValue([string] $Value) {
         $matchedStatus = [ValidateGSCStatus]::ValidStatuses | 
-            Where-Object { $_.ToLower() -eq $Value.ToLower() }
+        Where-Object { $_.ToLower() -eq $Value.ToLower() }
         
         if (-not $matchedStatus) { 
             throw "Invalid GSC status: [$Value]. Valid statuses are: $([ValidateGSCStatus]::ValidStatuses -join ', ')"
@@ -714,7 +716,7 @@ class ValidateOperatingSystem : ValidatorBase {
     
     [void] ValidateValue([string] $Value) {
         $matchedOS = [ValidateOperatingSystem]::ValidOperatingSystems | 
-            Where-Object { $_ -match [regex]::Escape($Value) }
+        Where-Object { $_ -match [regex]::Escape($Value) }
         
         if (-not $matchedOS) { 
             throw "Invalid operating system: [$Value]. Available options include: $([ValidateOperatingSystem]::ValidOperatingSystems[0..5] -join ', ')..."
@@ -741,7 +743,7 @@ class ValidateProgram : ValidatorBase {
         
         foreach ($program in $inputPrograms) {
             $matchedProgram = [ValidateProgram]::ValidPrograms | 
-                Where-Object { $_.ToLower() -eq $program.ToString().ToLower() }
+            Where-Object { $_.ToLower() -eq $program.ToString().ToLower() }
             
             if ($matchedProgram) { 
                 $this.Programs += $matchedProgram 
@@ -792,7 +794,7 @@ function ConvertTo-RedmineCustomField {
     
     $formattedFields = foreach ($field in $CustomFields.GetEnumerator()) {
         @{
-            id = $field.Key
+            id    = $field.Key
             value = $field.Value
         }
     }
@@ -1314,7 +1316,8 @@ function Search-RedmineDB {
         # Configure comparison options
         $comparisonType = if ($CaseSensitive) { 
             [StringComparison]::Ordinal 
-        } else { 
+        }
+        else { 
             [StringComparison]::OrdinalIgnoreCase 
         }
         
@@ -1327,7 +1330,8 @@ function Search-RedmineDB {
             # Build status filter
             $statusFilter = if ($Status -ne '*') {
                 "&status_id=$($script:DBStatus[$Status])"
-            } else {
+            }
+            else {
                 "&status_id=*"
             }
             
@@ -1351,13 +1355,15 @@ function Search-RedmineDB {
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
-                    } else {
+                    }
+                    else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
-                            } else {
+                            }
+                            else {
                                 $fieldValue -imatch $Keyword
                             }
                         }
@@ -1371,13 +1377,15 @@ function Search-RedmineDB {
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
-                    } else {
+                    }
+                    else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
-                            } else {
+                            }
+                            else {
                                 $fieldValue -imatch $Keyword
                             }
                         }
@@ -1400,13 +1408,15 @@ function Search-RedmineDB {
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
-                    } else {
+                    }
+                    else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
-                            } else {
+                            }
+                            else {
                                 $fieldValue -imatch $Keyword
                             }
                         }
@@ -1420,26 +1430,31 @@ function Search-RedmineDB {
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             if ($fieldValue -is [array]) {
                                 $fieldValue -contains $Keyword
-                            } else {
+                            }
+                            else {
                                 $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                             }
                         }
-                    } else {
+                    }
+                    else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             if ($fieldValue -is [array]) {
                                 $fieldValue | Where-Object { 
                                     if ($CaseSensitive) {
                                         $_ -cmatch $Keyword
-                                    } else {
+                                    }
+                                    else {
                                         $_ -imatch $Keyword
                                     }
                                 }
-                            } else {
+                            }
+                            else {
                                 if ($null -eq $fieldValue) { return $false }
                                 if ($CaseSensitive) {
                                     $fieldValue -cmatch $Keyword
-                                } else {
+                                }
+                                else {
                                     $fieldValue -imatch $Keyword
                                 }
                             }
@@ -1454,13 +1469,15 @@ function Search-RedmineDB {
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             $null -ne $fieldValue -and $fieldValue.Equals($Keyword, $comparisonType)
                         }
-                    } else {
+                    }
+                    else {
                         { param($entry) 
                             $fieldValue = ($entry.CustomFields | Where-Object id -eq $fieldId).value
                             if ($null -eq $fieldValue) { return $false }
                             if ($CaseSensitive) {
                                 $fieldValue -cmatch $Keyword
-                            } else {
+                            }
+                            else {
                                 $fieldValue -imatch $Keyword
                             }
                         }
@@ -1473,12 +1490,14 @@ function Search-RedmineDB {
                             $null -ne $entry.Type -and $null -ne $entry.Type.name -and 
                             $entry.Type.name.Equals($Keyword, $comparisonType)
                         }
-                    } else {
+                    }
+                    else {
                         { param($entry) 
                             if ($null -eq $entry.Type -or $null -eq $entry.Type.name) { return $false }
                             if ($CaseSensitive) {
                                 $entry.Type.name -cmatch $Keyword
-                            } else {
+                            }
+                            else {
                                 $entry.Type.name -imatch $Keyword
                             }
                         }
@@ -1490,12 +1509,14 @@ function Search-RedmineDB {
                         { param($entry) 
                             $null -ne $entry.Name -and $entry.Name.Equals($Keyword, $comparisonType)
                         }
-                    } else {
+                    }
+                    else {
                         { param($entry) 
                             if ($null -eq $entry.Name) { return $false }
                             if ($CaseSensitive) {
                                 $entry.Name -cmatch $Keyword
-                            } else {
+                            }
+                            else {
                                 $entry.Name -imatch $Keyword
                             }
                         }
@@ -1543,8 +1564,8 @@ function Search-RedmineDB {
             # Convert to PSObjects and return sorted results
             Write-LogDebug "Converting $matchCount results to PSObjects"
             $results = $filteredResults.Values | 
-                ForEach-Object { $_.ToPSObject() } | 
-                Sort-Object ID
+            ForEach-Object { $_.ToPSObject() } | 
+            Sort-Object ID
             
             Write-LogInfo "Search completed successfully, returning $($results.Count) results"
             return $results
@@ -1728,12 +1749,19 @@ function Get-RedmineDB {
         [Parameter(ParameterSetName = 'ID', Mandatory = $true)]
         [String]$Id,
         [Parameter(ParameterSetName = 'Name', Mandatory = $true)]
-        [string]$Name
+        [string]$Name,
+        [switch]$AsJson
     )
 
     switch ($PsCmdlet.ParameterSetName) {
-        ID { $Script:Redmine.DB.Get($id).ToPSObject() }
-        Name { $Script:Redmine.DB.GetByName($name).ToPSObject() }
+        ID { 
+            if ($AsJson) { $Script:Redmine.DB.Get($id).ToJson(); return }
+            $Script:Redmine.DB.Get($id).ToPSObject() 
+        }
+        Name {
+            if ($AsJson) { $Script:Redmine.DB.GetByName($name).ToJson(); return }
+            $Script:Redmine.DB.GetByName($name).ToPSObject()
+        }
     } 	
 }
 
@@ -1980,7 +2008,8 @@ $MyInvocation.MyCommand.ScriptBlock.Module.OnRemove = {
     if (Get-Variable -Name 'Redmine' -Scope Script -ErrorAction SilentlyContinue) {
         try {
             $script:Redmine.SignOut()
-        } catch {
+        }
+        catch {
             Write-LogWarn "Failed to sign out during module cleanup: $($_.Exception.Message)"
         }
     }
