@@ -1357,7 +1357,7 @@ function Search-RedmineDB {
     .PARAMETER Keyword
         The search term to look for. Supports regex patterns for most fields.
     .PARAMETER Field
-        The field to search in. Valid options: 'parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress'
+        The field to search in. Valid options: 'name', 'parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress'
     .PARAMETER Status
         Filter results by status. Valid options: 'valid', 'to verify', 'invalid', '*' (all)
     .PARAMETER CaseSensitive
@@ -1383,7 +1383,7 @@ function Search-RedmineDB {
         Search-RedmineDB -Field serial -Keyword '^90L0A.*' -CaseSensitive
         # Case-sensitive regex search in serial number field
     .LINK
-        https://github.pw.utc.com/m335619/Collateral-RedmineDB
+        https://github.pw.utc.com/m335619/RedmineDB
     #>
     [CmdletBinding()]
     [OutputType([PSCustomObject[]])]
@@ -1392,8 +1392,8 @@ function Search-RedmineDB {
         [ValidateNotNullOrEmpty()]
         [string] $Keyword,
 
-        [ValidateSet('parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress')]
-        [string] $Field = 'serialnumber',
+        [ValidateSet('name', 'parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress')]
+        [string] $Field = 'name',
         
         [ValidateSet('valid', 'to verify', 'invalid', '*')]
         [string] $Status = '*',
@@ -1632,6 +1632,20 @@ function Search-RedmineDB {
                             else {
                                 $entry.Type.name -imatch $Keyword
                             }
+                        }
+                    }
+                }
+                'name' { 
+                    if ($ExactMatch) {
+                        { param($entry) 
+                            $null -ne $entry.Name -and $entry.Name.Equals($Keyword, $comparisonType)
+                        }
+                    }
+                    else {
+                        { param($entry) 
+                            $null -ne $entry.Name -and ($CaseSensitive ? 
+                                ($entry.Name -cmatch $Keyword) : 
+                                ($entry.Name -imatch $Keyword))
                         }
                     }
                 }

@@ -8,16 +8,16 @@ try {
     Write-LogInfo "Using mock API key for testing examples"
 
     # Connect to Redmine server
-    Connect-Redmine -Server "http://localhost:3000" -Key $key
+    Connect-Redmine -Server "http://localhost:3000/api" -Key $key
 
     # Write-LogInfo "Running Read-Example.ps1..."
     # . .\Examples\Read-Example.ps1
     
-    # Write-LogInfo "Running Update-Example.ps1..."
+    Write-LogInfo "Running Update-Example.ps1..."
     # . .\Examples\Update-Example.ps1
     
-    Write-LogInfo "Running Destroy-Example.ps1..."
-    . .\Examples\Destroy-Example.ps1
+    # Write-LogInfo "Running Destroy-Example.ps1..."
+    # . .\Examples\Destroy-Example.ps1
     
 
 

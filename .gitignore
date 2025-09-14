@@ -441,3 +441,5 @@ execution-policy.bak
 
 Examples/*.csv
 Old/
+Tests/
+Collateral-RedmineDB-Examples.ps1
