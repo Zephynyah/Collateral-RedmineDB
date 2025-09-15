@@ -114,7 +114,8 @@
 		'Enable-ConsoleLogging',
 		'Disable-ConsoleLogging',
 		'Set-LogFile',
-        'Get-ApiKey'
+        'Get-ApiKey',
+        'Get-RandomDB'
 	)
 	
 	# Cmdlets to export from this module

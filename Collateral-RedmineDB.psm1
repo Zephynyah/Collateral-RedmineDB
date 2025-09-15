@@ -479,7 +479,7 @@ class DB {
         $offset = 0
         $limit = $script:ModuleConstants.DefaultLimit
         $collection = @{}
-        
+
         try {
             do {
                 $url = "$BaseUrl`?offset=$offset&limit=$limit$($this.Include)$Filter"
@@ -610,6 +610,7 @@ class DB {
         }
     }
 }
+
 
 # Base validation class
 class ValidatorBase {
@@ -1392,7 +1393,7 @@ function Search-RedmineDB {
         [ValidateNotNullOrEmpty()]
         [string] $Keyword,
 
-        [ValidateSet('name', 'parent', 'type', 'serial', 'program', 'hostname', 'model', 'mac', 'macaddress')]
+        [ValidateSet('name', 'parent', 'type', 'serialnumber', 'program', 'hostname', 'model', 'mac', 'macaddress')]
         [string] $Field = 'name',
         
         [ValidateSet('valid', 'to verify', 'invalid', '*')]
@@ -2196,12 +2197,14 @@ function Get-RedmineDB {
     .LINK
     https://github.pw.utc.com/m335619/Collateral-RedmineDB
     #>
-    [CmdletBinding(DefaultParameterSetName = 'ID' )]
+    [CmdletBinding(DefaultParameterSetName = 'AllData' )]
     Param (
         [Parameter(ParameterSetName = 'ID', Mandatory = $true)]
         [String]$Id,
         [Parameter(ParameterSetName = 'Name', Mandatory = $true)]
         [string]$Name,
+        [Parameter(ParameterSetName = 'Name')]
+        [switch]$All,
         [switch]$AsJson
     )
 
@@ -2215,13 +2218,88 @@ function Get-RedmineDB {
             $Script:Redmine.DB.GetByName($name).ToPSObject()
         }
         else {
-            Write-LogError "Either -Id or -Name must be provided"
-            return $null
+            $Script:Redmine.DB.GetAll()
         }
     }
     catch {
         <#Do this if a terminating exception happens#>
         Write-LogError "Failed to get Redmine DB entry" -Exception $_.Exception
+    }
+}
+
+function Get-RandomDB {
+    <#
+    .SYNOPSIS
+    Generates a random integer within a specified range.
+
+    .DESCRIPTION
+    The Get-Random function generates a random integer between the specified minimum and maximum values.
+    This can be useful for testing, sampling, or any scenario where a random number is needed.
+
+    .PARAMETER Minimum
+    Specifies the inclusive lower bound of the random number range (default: 25).
+    Type: Int32
+    Position: Named
+    Mandatory: Yes
+
+    .PARAMETER Maximum
+    Specifies the exclusive upper bound of the random number range (default: 18721).
+    Type: Int32
+    Position: Named
+    Mandatory: Yes
+
+    .EXAMPLE
+    Get-Random
+
+    Generates a random integer between default values (25 and 18720).
+
+    .EXAMPLE
+    Get-Random -Minimum 1 -Maximum 1000
+
+    Generates a random integer between 1 and 999.
+
+    .EXAMPLE
+    $randomNumber = Get-Random -Minimum 10 -Maximum 20
+    Write-Host "Random number between 10 and 19: $randomNumber"
+
+    Generates a random integer between 10 and 19 and displays it.
+
+    .OUTPUTS
+    System.Int32
+    Returns a randomly generated integer within the specified range.
+
+    .NOTES
+    - The Minimum value is inclusive, while the Maximum value is exclusive.
+    - Ensure that Minimum is less than Maximum to avoid errors.
+
+    .LINK
+    https://learn.microsoft.com/en-us/powershell/module/microsoft.powershell.utility/get-random
+    #>
+    Param (
+        [Parameter(Mandatory = $false)]
+        [Int32]$Count = 1
+    )
+
+    $Results = @()
+
+    try {
+        $allEntries = $Script:Redmine.DB.GetAll()
+        if ($allEntries.Count -eq 0) {
+            Write-LogInfo "No entries found in the Redmine database."
+            return $null
+        }
+        $randomKeys = (Get-Random -InputObject $($allEntries.Keys) -Count $Count)
+
+        $randomKeys | ForEach-Object {
+            Write-LogInfo "Selected Random ID: $_"
+            $Results += $Script:Redmine.DB.Get($_).ToPSObject()
+        }
+
+        return $Results
+    }
+    catch {
+        Write-LogError "Failed to generate random number" -Exception $_.Exception
+        throw
     }
 }
 

@@ -23,16 +23,49 @@
 # Import the module (if not already imported)
 # Import-Module .\Collateral-RedmineDB.psm1 -Force
 
+# ID                     : 3637
+# Name                   :  SS-002765
+# Type                   : Workstation
+# Status                 : valid
+# Private                : False
+# Project                : Change Control
+# Tags                   : 
+# Author                 : Erin Rivera
+# Description            : 
+# Created                : 04/13/2023 20:14:10
+# Updated                : 09/05/2025 18:53:58
+# System Make            : Dell Inc.
+# System Model           : Precision Tower 3650
+# Serial Number          : BL05KQ3
+# Operating System       : 
+# Asset Tag              : RA093436
+# Periods Processing     : 0
+# Host Name              : MM14-03
+# Program                : P268
+# Hardware Lifecycle     : Operational
+# Memory                 : 
+# Memory Volatility      : Non-Volatile
+# State                  : CT
+# Building               : CT - M-Mezz
+# Room                   : M-Mezz - 14
+# Rack/Seat              : MM14-03
+# Node                   : 
+# Safe and Drawer Number : 
+# Refresh Date           : 
+
 # Connect to Redmine server (replace with your server details)
 # Connect-Redmine -Server "https://your-redmine-server.com" -Key "your-api-key"
 
 Write-Host "=== Collateral-RedmineDB Read Examples ===" -ForegroundColor Green
 
+# Get All DB Entries
+$script:DBEntries = (Get-RedmineDB).Values.ToPSObject()
+
 # Example 1: Get entry by ID
 Write-Host "`n1. Getting entry by ID..." -ForegroundColor Yellow
 
 try {
-    $entryById = Get-RedmineDB -Id "12345"
+    $entryById = Get-RedmineDB -Id ($script:DBEntries | Get-Random).Id
     if ($entryById) {
         Write-Host "✓ Found entry by ID:" -ForegroundColor Green
         Write-Host "  Name: $($entryById.Name)"
@@ -51,7 +84,7 @@ catch {
 Write-Host "`n2. Getting entry by name..." -ForegroundColor Yellow
 
 try {
-    $entryByName = Get-RedmineDB -Name "SC-300012"
+    $entryByName = Get-RedmineDB -Name ($script:DBEntries | Get-Random).Name
     if ($entryByName) {
         Write-Host "✓ Found entry by name:" -ForegroundColor Green
         Write-Host "  ID: $($entryByName.Id)"
@@ -70,7 +103,7 @@ catch {
 Write-Host "`n3. Getting entry as JSON format..." -ForegroundColor Yellow
 
 try {
-    $jsonOutput = Get-RedmineDB -Id "12345" -AsJson
+    $jsonOutput = Get-RedmineDB -Id ($script:DBEntries | Get-Random).Id -AsJson
     if ($jsonOutput) {
         Write-Host "✓ Entry in JSON format:" -ForegroundColor Green
         Write-Host $jsonOutput
@@ -84,8 +117,10 @@ catch {
 Write-Host "`n4. Searching by hostname..." -ForegroundColor Yellow
 
 try {
-    $hostnameResults = Search-RedmineDB -Field hostname -Keyword "server-*"
-    Write-Host "✓ Found $($hostnameResults.Count) entries with hostname matching 'server-*'" -ForegroundColor Green
+    $Hostname = ($script:DBEntries | Where-Object {  ($_.'Host Name'.Length -ge 5) } | Get-Random).'Host Name'
+    $Hostname = ($Hostname.Substring(0, 3)).Trim()
+    $hostnameResults = Search-RedmineDB -Field hostname -Keyword $Hostname 
+    Write-Host "✓ Found $($hostnameResults.Count) entries with hostname matching '$($Hostname)*'" -ForegroundColor Green
     
     if ($hostnameResults.Count -gt 0) {
         Write-Host "First few results:"
@@ -103,7 +138,7 @@ Write-Host "`n5. Searching by name using Get-RedmineDB..." -ForegroundColor Yell
 
 try {
     # Note: Search-RedmineDB no longer supports 'name' field - use Get-RedmineDB instead
-    $nameSearchExample = Get-RedmineDB -Name "SC-300012"
+    $nameSearchExample = Get-RedmineDB -Name ($script:DBEntries | Get-Random).Name
     if ($nameSearchExample) {
         Write-Host "✓ Found entry by name using Get-RedmineDB:" -ForegroundColor Green
         Write-Host "  - $($nameSearchExample.Name) (ID: $($nameSearchExample.Id))"
@@ -120,9 +155,11 @@ catch {
 Write-Host "`n6. Searching by hostname..." -ForegroundColor Yellow
 
 try {
-    $hostnameResults = Search-RedmineDB -Field hostname -Keyword "server-*"
-    Write-Host "✓ Found $($hostnameResults.Count) entries with hostname matching 'server-*'" -ForegroundColor Green
-    
+    $Hostname = ($script:DBEntries | Where-Object {  ($_.'Host Name'.Length -ge 5) } | Get-Random).'Host Name'
+    $Hostname = ($Hostname.Substring(0, 3)).Trim()
+    $hostnameResults = Search-RedmineDB -Field hostname -Keyword $Hostname
+    Write-Host "✓ Found $($hostnameResults.Count) entries with hostname matching '$($Hostname)*'" -ForegroundColor Green
+
     $hostnameResults | ForEach-Object {
         Write-Host "  - $($_.Name): $($_.CustomFields | Where-Object {$_.name -like '*hostname*'} | Select-Object -ExpandProperty value)"
     }
@@ -152,9 +189,10 @@ catch {
 Write-Host "`n8. Searching by serial number..." -ForegroundColor Yellow
 
 try {
-    $serialResults = Search-RedmineDB -Field serialnumber -Keyword "SN*"
-    Write-Host "✓ Found $($serialResults.Count) entries with serial numbers starting with 'SN'" -ForegroundColor Green
-    
+    $SerialNumber = ($script:DBEntries | Where-Object {  ($_.'Serial Number'.Length -ge 5) } | Get-Random).'Serial Number'
+    $SerialNumber = ($SerialNumber.Substring(0, 3)).Trim()
+    $serialResults = Search-RedmineDB -Field serialnumber -Keyword $SerialNumber
+    Write-Host "✓ Found $($serialResults.Count) entries with serial numbers starting with '$($SerialNumber)*'" -ForegroundColor Green
     $serialResults | Select-Object -First 3 | ForEach-Object {
         $serialField = $_.CustomFields | Where-Object {$_.name -like '*serial*'}
         Write-Host "  - $($_.Name): $($serialField.value)"
@@ -168,11 +206,11 @@ catch {
 Write-Host "`n9. Searching by program..." -ForegroundColor Yellow
 
 try {
-    $programResults = Search-RedmineDB -Field program -Keyword "P123"
-    Write-Host "✓ Found $($programResults.Count) entries associated with program 'P123'" -ForegroundColor Green
-    
+    $programResults = Search-RedmineDB -Field program -Keyword "P268"
+    Write-Host "✓ Found $($programResults.Count) entries associated with program 'P268'" -ForegroundColor Green
+
     $programResults | ForEach-Object {
-        $programField = $_.CustomFields | Where-Object {$_.name -like '*program*'}
+        $programField = $_.CustomFields | Where-Object {$_.name -ilike '*program*'}
         Write-Host "  - $($_.Name): Programs = $($programField.value -join ', ')"
     }
 }
@@ -184,9 +222,11 @@ catch {
 Write-Host "`n10. Searching by MAC address..." -ForegroundColor Yellow
 
 try {
-    $macResults = Search-RedmineDB -Field mac -Keyword "00:1B:*"
-    Write-Host "✓ Found $($macResults.Count) entries with MAC addresses starting with '00:1B:'" -ForegroundColor Green
-    
+    $macAddress = ($script:DBEntries | Where-Object { ($_.'MAC Address'.Length -ge 5) } | Get-Random).'MAC Address'
+    $macAddress = ($macAddress.Substring(0, 5)).Trim()
+    $macResults = Search-RedmineDB -Field mac -Keyword "$($macAddress)*"
+    Write-Host "✓ Found $($macResults.Count) entries with MAC addresses starting with '$($macAddress)*'" -ForegroundColor Green
+
     $macResults | ForEach-Object {
         $macField = $_.CustomFields | Where-Object {$_.name -like '*mac*'}
         Write-Host "  - $($_.Name): $($macField.value)"
